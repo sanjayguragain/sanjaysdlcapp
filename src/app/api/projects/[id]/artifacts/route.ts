@@ -1,8 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { generateArtifact } from "@/lib/ai";
+import { generateArtifact, scoreArtifactQuality } from "@/lib/ai";
 import { ARTIFACT_DEFINITIONS, ArtifactType, ArtifactStatus } from "@/types";
 import { getProjectPhase } from "@/lib/workflow";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
+/** Format stakeholders JSON into a context block for the AI prompt. */
+function formatStakeholders(raw: string | null | undefined): string {
+  if (!raw) return "";
+  try {
+    const list = JSON.parse(raw) as { name: string; role: string }[];
+    if (!Array.isArray(list) || list.length === 0) return "";
+    return "\n\nStakeholders:\n" + list.map((s) => `- ${s.name} (${s.role || "no role specified"})`).join("\n");
+  } catch {
+    return "";
+  }
+}
+
+const MAX_VERSIONS = 50;
+
+async function saveVersionSnapshot(
+  artifactId: string,
+  content: string,
+  version: number
+) {
+  await prisma.artifactVersion.create({
+    data: { artifactId, content, version },
+  });
+  const count = await prisma.artifactVersion.count({ where: { artifactId } });
+  if (count > MAX_VERSIONS) {
+    const oldest = await prisma.artifactVersion.findFirst({
+      where: { artifactId },
+      orderBy: { savedAt: "asc" },
+    });
+    if (oldest) {
+      await prisma.artifactVersion.delete({ where: { id: oldest.id } });
+    }
+  }
+}
 
 const VALID_TYPES: ArtifactType[] = ARTIFACT_DEFINITIONS.map((d) => d.type);
 
@@ -57,14 +93,14 @@ export async function POST(
     return NextResponse.json({ error: "Unknown artifact type" }, { status: 400 });
   }
 
-  let user = await prisma.user.findFirst();
+  // Resolve the logged-in user (from session, else DB fallback)
+  const session = await getServerSession(authOptions);
+  let user = session?.user?.email
+    ? await prisma.user.findUnique({ where: { email: session.user.email } })
+    : null;
   if (!user) {
-    user = await prisma.user.create({
-      data: {
-        name: "Default User",
-        email: "user@example.com",
-        role: "product_manager",
-      },
+    user = await prisma.user.findFirst() ?? await prisma.user.create({
+      data: { name: "Default User", email: "user@example.com", role: "product_manager" },
     });
   }
 
@@ -75,10 +111,17 @@ export async function POST(
     content: a.content,
   }));
 
-  const projectContext = `Project: ${project.name}\nDescription: ${project.description || "N/A"}\n\nExisting Documents:\n${docsContent}\n\nExisting Artifacts:\n${existingArtifacts.map((a: { type: string; content: string }) => `[${a.type}]: ${a.content.substring(0, 500)}`).join("\n")}`;
+  const projectContext = `Project: ${project.name}\nDescription: ${project.description || "N/A"}${formatStakeholders(project.stakeholders)}\n\nExisting Documents:\n${docsContent}\n\nExisting Artifacts:\n${existingArtifacts.map((a: { type: string; content: string }) => `[${a.type}]: ${a.content.substring(0, 500)}`).join("\n")}`;
+
+  const today = new Date().toISOString().slice(0, 10);
 
   // Generate content
-  const result = await generateArtifact(type as ArtifactType, projectContext);
+  const result = await generateArtifact(
+    type as ArtifactType,
+    projectContext,
+    undefined,
+    { authorName: user.name, createdDate: today, isUpdate: false }
+  );
 
   const artifact = await prisma.artifact.create({
     data: {
@@ -141,11 +184,17 @@ export async function PUT(
     );
   }
 
+  // Snapshot the current content before overwriting
+  if (content !== artifact.content) {
+    await saveVersionSnapshot(artifactId, artifact.content, artifact.version);
+  }
+
   const updated = await prisma.artifact.update({
     where: { id: artifactId },
     data: {
       content,
       ...(title ? { title } : {}),
+      confidenceScore: scoreArtifactQuality(artifact.type as ArtifactType, content),
       version: artifact.version + 1,
       status: "in_progress",
     },

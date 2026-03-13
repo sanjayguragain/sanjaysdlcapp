@@ -1,8 +1,46 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { generateArtifact } from "@/lib/ai";
+import { generateArtifact, scoreArtifactQuality } from "@/lib/ai";
 import { ArtifactType, ArtifactStatus, ARTIFACT_DEFINITIONS } from "@/types";
 import { getProjectPhase } from "@/lib/workflow";
+import { extractBlockers } from "@/lib/artifactChecks";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
+/** Format stakeholders JSON into a context block for the AI prompt. */
+function formatStakeholders(raw: string | null | undefined): string {
+  if (!raw) return "";
+  try {
+    const list = JSON.parse(raw) as { name: string; role: string }[];
+    if (!Array.isArray(list) || list.length === 0) return "";
+    return "\n\nStakeholders:\n" + list.map((s) => `- ${s.name} (${s.role || "no role specified"})`).join("\n");
+  } catch {
+    return "";
+  }
+}
+
+const MAX_VERSIONS = 50;
+
+/** Save a version snapshot and prune oldest if the cap is exceeded. */
+async function saveVersionSnapshot(
+  artifactId: string,
+  content: string,
+  version: number
+) {
+  await prisma.artifactVersion.create({
+    data: { artifactId, content, version },
+  });
+  const count = await prisma.artifactVersion.count({ where: { artifactId } });
+  if (count > MAX_VERSIONS) {
+    const oldest = await prisma.artifactVersion.findFirst({
+      where: { artifactId },
+      orderBy: { savedAt: "asc" },
+    });
+    if (oldest) {
+      await prisma.artifactVersion.delete({ where: { id: oldest.id } });
+    }
+  }
+}
 
 export async function GET(
   _req: NextRequest,
@@ -29,6 +67,8 @@ export async function PUT(
   const { id, artifactId } = await params;
   const body = await req.json();
 
+  const QUALITY_SUBMIT_THRESHOLD = 0.8; // 80%
+
   const artifact = await prisma.artifact.findUnique({
     where: { id: artifactId },
   });
@@ -53,11 +93,20 @@ export async function PUT(
       .filter((a) => a.id !== artifactId)
       .map((a) => ({ type: a.type, content: a.content }));
 
-    const projectContext = `Project: ${project.name}\nDescription: ${project.description || "N/A"}\n\nExisting Documents:\n${docsContent}\n\nOther Artifacts:\n${otherArtifacts.map((a) => `[${a.type}]: ${a.content.substring(0, 500)}`).join("\n")}`;
+    const projectContext = `Project: ${project.name}\nDescription: ${project.description || "N/A"}${formatStakeholders(project.stakeholders)}\n\nExisting Documents:\n${docsContent}\n\nOther Artifacts:\n${otherArtifacts.map((a) => `[${a.type}]: ${a.content.substring(0, 500)}`).join("\n")}`;
+
+    const session = await getServerSession(authOptions);
+    const sessionUser = session?.user?.email
+      ? await prisma.user.findUnique({ where: { email: session.user.email }, select: { name: true } })
+      : null;
+    const authorName = sessionUser?.name ?? "Unknown";
+    const today = new Date().toISOString().slice(0, 10);
 
     const result = await generateArtifact(
       artifact.type as ArtifactType,
-      projectContext
+      projectContext,
+      undefined,
+      { authorName, createdDate: today, isUpdate: true, changeSummary: "Document regenerated" }
     );
 
     const updated = await prisma.artifact.update({
@@ -76,22 +125,46 @@ export async function PUT(
     return NextResponse.json(updated);
   }
 
+  // Guard: block submission if the document still has unresolved placeholders or open questions
+  if (body.status === "awaiting_approval") {
+    const contentToCheck: string = body.content ?? artifact.content ?? "";
+    const openQuestions = extractBlockers(contentToCheck);
+    const qualityScore = scoreArtifactQuality(artifact.type as ArtifactType, contentToCheck);
+    const bypassBlockers = qualityScore >= QUALITY_SUBMIT_THRESHOLD;
+
+    if (openQuestions.length > 0 && !bypassBlockers) {
+      return NextResponse.json(
+        {
+          error: `Cannot submit for approval: ${openQuestions.length} open question(s) must be resolved first.`,
+          openQuestions,
+          qualityScore,
+          qualityPct: Math.round(qualityScore * 100),
+        },
+        { status: 422 }
+      );
+    }
+  }
+
   // Regular update
   const updateData: Record<string, unknown> = {};
   if (body.content !== undefined) updateData.content = body.content;
   if (body.status !== undefined) updateData.status = body.status;
   if (body.title !== undefined) updateData.title = body.title;
 
+  // When submitting for approval, always re-score quality on the submitted content.
+  if (body.status === "awaiting_approval") {
+    const contentToScore: string = body.content ?? artifact.content ?? "";
+    updateData.confidenceScore = scoreArtifactQuality(artifact.type as ArtifactType, contentToScore);
+  }
+
   // When content changes, save current content as a version snapshot before updating
   if (body.content !== undefined && body.content !== artifact.content) {
-    await prisma.artifactVersion.create({
-      data: {
-        artifactId,
-        content: artifact.content,
-        version: artifact.version,
-      },
-    });
+    await saveVersionSnapshot(artifactId, artifact.content, artifact.version);
     updateData.version = { increment: 1 };
+    // If we already re-scored for submission, keep that value; otherwise score now.
+    if (updateData.confidenceScore === undefined) {
+      updateData.confidenceScore = scoreArtifactQuality(artifact.type as ArtifactType, body.content);
+    }
   }
 
   const updated = await prisma.artifact.update({

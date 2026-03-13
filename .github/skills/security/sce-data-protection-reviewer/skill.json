@@ -1,0 +1,11 @@
+{
+  "name": "sce-data-protection-reviewer",
+  "version": "1.0.0",
+  "author": "SDLC Security Team",
+  "description": "Assess data protection including encryption, key management, secret storage, and PII handling",
+  "category": "Security & Compliance",
+  "tags": ["security", "encryption", "data-protection", "key-management", "pii"],
+  "license": "MIT",
+  "compatibility": ["claude-code", "codex", "amp", "opencode"],
+  "allowed-tools": ["Bash", "Read", "Grep"]
+}

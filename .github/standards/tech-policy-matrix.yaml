@@ -1,0 +1,1418 @@
+policy:
+  meta:
+    org: "SCE (Southern California Edison)"
+    doc_name: "Technology Standards Matrix"
+    version: "4.0.0"
+    last_updated: "2026-03-11"
+    owner: "Enterprise Architecture Team"
+    status: "Active"
+    purpose: >
+      Defines approved technology stacks by delivery surface (SPA/WebApp/Mobile/Windows/AI-Voice), plus required engineering standards. Used to generate solution-specific standards for all SCE application development. Ensures consistency, maintainability, and security across all applications.
+
+  preferences:
+    # Highest preference first - based on SCE's primary recommended stacks
+    stack_preference_order:
+    - stack.react_node_ts_js
+    - stack.python
+    - stack.dotnet
+    - stack.swift
+
+    surface_preference_order:
+    - surface.spa
+    - surface.webapp
+    - surface.mobile
+    - surface.windows_app
+    - surface.ai_voice
+
+  glossary:
+    stacks:
+      stack.react_node_ts_js:
+        label: "React + Node.js + TypeScript + JavaScript"
+        typical_scope: [ "frontend", "backend", "fullstack", "spa", "mobile" ]
+        version_constraints: "TypeScript 5.0+, Node.js 18+ LTS, React 18+"
+
+      stack.python:
+        label: "Python"
+        typical_scope: [ "backend", "data", "automation", "analytics", "ml", "ai" ]
+        version_constraints: "Python 3.11+"
+
+      stack.dotnet:
+        label: ".NET"
+        typical_scope: [ "backend", "windows", "enterprise-services" ]
+        version_constraints: ".NET 10+"
+
+      stack.swift:
+        label: "Swift"
+        typical_scope: [ "ios", "mobile", "native-apps" ]
+        version_constraints: "Swift 5.9+, Xcode 15+"
+
+    surfaces:
+      surface.spa:
+        label: "SPA (Single Page Application)"
+        description: "Client-heavy browser applications with rich interactivity (React, Vue, Angular)"
+
+      surface.webapp:
+        label: "WebApp (Traditional Web)"
+        description: "Server-rendered web applications with traditional request/response patterns"
+
+      surface.mobile:
+        label: "Mobile"
+        description: "Native or cross-platform mobile applications for iOS/Android"
+
+      surface.windows_app:
+        label: "Windows App"
+        description: "Native Windows desktop applications"
+
+      surface.ai_voice:
+        label: "AI/Voice"
+        description: "AI/ML workloads, voice interfaces, and intelligent assistants"
+
+  # ---------------------------------------------------------------------------
+  # Global standards apply to ALL solutions unless a cell explicitly overrides.
+  # ---------------------------------------------------------------------------
+  global_standards:
+    required:
+    - id: STD-SEC-001
+      title: "Security baseline"
+      intent: "Minimum required security controls for any solution"
+      requirements:
+      - "All HTTP traffic must use HTTPS/TLS 1.2 minimum, TLS 1.3 recommended"
+      - "Secrets stored in Azure Key Vault or approved secrets manager; never hardcoded or committed to Git"
+      - "Automated dependency scanning in CI/CD (Dependabot, Snyk, or equivalent)"
+      - "Block deployment for critical vulnerabilities"
+      - "Static Application Security Testing (SAST) on every pull request"
+      - "Certificate Authority: Enterprise CA or Let's Encrypt"
+      source: "Cybersecurity Administrative Standard v9"
+
+    - id: STD-VULN-001
+      title: "Vulnerability Management"
+      intent: "Formal process for identifying, assessing, and remediating vulnerabilities"
+      requirements:
+      - "Vulnerability assessments required annually or when Critical/High vulnerabilities identified"
+      - "Vulnerability remediation timelines documented and tracked based on risk assessment"
+      - "All vulnerabilities tracked through remediation to closure"
+      - "Vulnerability scan results incorporated into risk management process"
+      - "Applicability of vulnerabilities determined as part of management process"
+      - "Vulnerability monitoring tools and techniques documented"
+      source: "Cybersecurity Administrative Standard v9, Section 4.2.1"
+      added: "2026-01-21"
+
+    - id: STD-OBS-001
+      title: "Observability baseline"
+      intent: "Required monitoring and logging for all services"
+      requirements:
+      - "Structured JSON logs with required fields: timestamp, level, message, user_id, trace_id"
+      - "Logging tool: ELK Stack or Azure Monitor"
+      - "Metrics: RED metrics required (Request rate, Error rate, Latency/Duration)"
+      - "Metrics tool: Prometheus + Grafana or Azure Monitor"
+      - "Service health checks implemented"
+      - "Distributed tracing for multi-service systems (Jaeger or Azure Application Insights)"
+      - "Security logging functions configured and reviewed regularly"
+      - "System audit records reviewed at least weekly for indicators of compromise and unusual activity"
+      - "Centralized log aggregation to identify cross-system anomalies and events"
+      - "Audit logs protected from unauthorized access, modification, and deletion"
+      - "Reliable time source across all logging systems"
+      source: "Cybersecurity Administrative Standard v9, Sections 5.4.4, 6.2.1"
+      updated: "2026-01-21"
+
+    - id: STD-QA-001
+      title: "Quality baseline"
+      intent: "Minimum quality and testing standards"
+      requirements:
+      - "Unit test coverage: 85% minimum"
+      - "Integration test coverage: 70% minimum"
+      - "Critical paths: 100% E2E coverage"
+      - "CI pipeline runs lint + tests on every pull request"
+      - "Code review required before merge"
+      - "Automated testing in CI/CD"
+
+    - id: STD-API-001
+      title: "API design baseline"
+      intent: "Consistent API design across all services"
+      requirements:
+      - "URL versioning: /api/v1/resource format"
+      - "Resource naming: Plural nouns (e.g., /users not /user)"
+      - "HTTP verbs for actions: GET, POST, PUT, DELETE, PATCH"
+      - "Standard status codes: 200 OK, 201 Created, 204 No Content, 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 500 Internal Server Error"
+      - "Consistent error response format with code, message, and field"
+      - "Consistent data response format with data, meta, and errors fields"
+      - "API versioning maintained for 12 months after new version release"
+
+    - id: STD-AUTH-001
+      title: "Authentication & Authorization baseline"
+      intent: "Secure authentication across all applications"
+      requirements:
+      - "JWT primary method for stateless API authentication"
+      - "JWT access token expiry: 15 minutes maximum"
+      - "JWT refresh token expiry: 7 days maximum"
+      - "JWT algorithm: HS256 or RS256 (prefer RS256 for multi-service)"
+      - "JWT signing key stored in secrets manager, rotated quarterly"
+      - "Password hashing: bcrypt (cost factor 12) or Argon2"
+      - "Password minimum: 12 characters with complexity requirements"
+      - "OAuth 2.0 + OpenID Connect for SSO"
+      - "Identity Provider: Microsoft Entra ID (Azure AD) primary, Okta alternative"
+      - "Session storage: Azure Cosmos DB or PostgreSQL (never in-memory)"
+
+    - id: STD-NFR-001
+      title: "Non-functional requirements baseline"
+      intent: "Performance, scalability, and availability standards"
+      requirements:
+      - "API response time: <1 second at 95th percentile"
+      - "Page load time: <3 seconds initial, <1 second subsequent"
+      - "Database query time: <100ms for OLTP queries"
+      - "Horizontal scaling preferred over vertical"
+      - "Stateless services required for load balancing"
+      - "Database connection pooling required"
+      - "Target uptime: 99.9% for critical systems"
+      - "Health checks required for all services"
+      - "Graceful degradation preferred over hard failures"
+      - "Backups: Daily minimum, 30-day retention"
+      - "RPO (Recovery Point Objective): 24 hours"
+      - "RTO (Recovery Time Objective): 4 hours"
+
+    - id: STD-CONTAINER-001
+      title: "Containerization baseline"
+      intent: "All services must be containerized"
+      requirements:
+      - "Docker required for all deployable services"
+      - "Multi-stage builds to minimize image size"
+      - "Non-root user in containers"
+      - "Minimal base images (Alpine, Distroless)"
+      - "Tag images with version and git commit SHA"
+
+    - id: STD-ASSET-001
+      title: "Asset Management"
+      intent: "Comprehensive inventory of all IT assets"
+      requirements:
+      - "Comprehensive inventories of hardware assets maintained in Configuration Management Database (CMDB)"
+      - "Comprehensive inventories of software and software licenses maintained in CMDB"
+      - "Required attributes for each asset included in CMDB"
+      - "Inventories updated throughout asset lifecycle and reviewed at least annually"
+      - "Only authorized applications installed and used"
+      source: "Cybersecurity Administrative Standard v9, Sections 4.1.1, 4.1.2"
+      added: "2026-01-21"
+
+    - id: STD-DATA-001
+      title: "Data Security"
+      intent: "Protect confidentiality, integrity, and availability of data"
+      requirements:
+      - "Data at rest adequately protected according to risk (encryption required for sensitive data)"
+      - "Data in transit encrypted when crossing less trusted zones (VPNs, TLS)"
+      - "Cryptographic key management procedures required (generation, distribution, storage, access, destruction)"
+      - "Removable media protected and scanned for malicious code prior to use"
+      - "Integrity verification tools deployed to detect unauthorized changes to software, firmware, and information"
+      - "Procedures to ensure software updates, patches, and firmware from valid and trusted sources"
+      source: "Cybersecurity Administrative Standard v9, Section 5.3"
+      added: "2026-01-21"
+
+    - id: STD-CONFIG-001
+      title: "Configuration Management"
+      intent: "Establish and maintain secure baseline configurations"
+      requirements:
+      - "Standard baseline security configuration required for all systems"
+      - "Secure configuration settings using industry standardized baselines (CIS, NIST)"
+      - "Configuration changes approved, documented, and tracked"
+      - "Configuration management plan required throughout system development lifecycle"
+      - "Security configurations reviewed prior to implementation"
+      - "Unnecessary functions, software, ports, protocols, and services disabled or removed"
+      - "System configured to provide only operationally essential capabilities"
+      source: "Cybersecurity Administrative Standard v9, Section 5.4.1"
+      added: "2026-01-21"
+
+    - id: STD-PATCH-001
+      title: "Software and Hardware Maintenance"
+      intent: "Keep systems up to date and secure"
+      requirements:
+      - "Procedures and schedules ensure software, operating systems, and firmware kept up to date"
+      - "Hardware replaced when lacking needed security capabilities"
+      - "End-of-life maintenance support and obsolescence plans defined and implemented"
+      - "Maintenance activities scheduled, documented, and reviewed"
+      source: "Cybersecurity Administrative Standard v9, Sections 5.4.2, 5.4.3"
+      added: "2026-01-21"
+
+    - id: STD-SDLC-001
+      title: "Secure Software Development Lifecycle"
+      intent: "Integrate security throughout software development"
+      requirements:
+      - "Risk assessment conducted for software development process"
+      - "Secure coding practices used to mitigate common threats (injection, buffer overflows, XSS)"
+      - "Static and dynamic analysis, penetration testing, and vulnerability scanning required"
+      - "Automated testing tools used wherever possible"
+      - "Change management process ensures software changes reviewed and approved before implementation"
+      - "Access controls for code repositories, build servers, and development environments using MFA and least privilege"
+      - "Incident response plan for security incidents in development process"
+      - "Detailed documentation maintained: design docs, code reviews, test results, change management logs"
+      - "Security and privacy assessments at all post-design stages"
+      - "Verifiable flaw remediation process with corrections for identified issues"
+      source: "Cybersecurity Administrative Standard v9, Sections 4.1.7, 5.4.6"
+      added: "2026-01-21"
+
+    - id: STD-SUPPLY-001
+      title: "Supply Chain Security"
+      intent: "Manage cybersecurity risks from third-party components and vendors"
+      requirements:
+      - "Third-party suppliers/vendors providing Information Systems, components, and services undergo cybersecurity assessment"
+      - "Security requirements included in contracts commensurate with supplier criticality"
+      - "Provenance records maintained for all acquired technology products and services"
+      - "Authenticity and integrity of components verified prior to acquisition and use"
+      - "Software patches, updates, and upgrades acquired only from authenticated and trustworthy providers"
+      - "Supplier access deactivated promptly when no longer needed"
+      - "Due diligence performed on prospective suppliers consistent with risk level"
+      source: "Cybersecurity Administrative Standard v9, Sections 3.6, 4.2.9, 4.2.10"
+      added: "2026-01-21"
+
+    - id: STD-CICD-001
+      title: "CI/CD Pipeline baseline"
+      intent: "Standardize CI/CD pipeline stages and enforce security and quality gates"
+      requirements:
+      - "All repositories must use the shared reusable workflow library (EdisonInternational/actions) at a pinned version"
+      - "Build pipelines must include a security check gate as the first stage; builds fail on critical/high vulnerabilities (STRICT mode default)"
+      - "SonarQube static analysis required on every pull request using the appropriate language-specific scanner"
+      - "SonarQube quality gate must be enabled (QUALITY_GATE_CHECK: true) and must pass before merge"
+      - "CI pipeline runs lint, unit tests, and SAST on every pull request"
+      - "GitHub Actions workflows must use permissions: read-all as the default and grant only required permissions per job (least-privilege)"
+      - "Workflow run history must be cleaned on a weekly schedule to manage storage (clean.yml)"
+      source: "HelloWorld reference implementation repos"
+      added: "2026-03-11"
+
+    - id: STD-ARTIFACT-001
+      title: "Artifact Repository Management"
+      intent: "Centralize artifact storage and ensure dependency provenance"
+      requirements:
+      - "All build artifacts must be published to the approved artifact repository (Nexus)"
+      - "Release artifacts must be uploaded to Nexus on release publish events"
+      - "Package managers must resolve dependencies through the Nexus proxy (npm, pip, Maven, NuGet)"
+      - "Artifacts must be downloadable from Nexus for deployment (nexus-artifact-download)"
+      - "Direct downloads from public registries in CI/CD are prohibited; all traffic routes through Nexus proxy"
+      source: "HelloWorld reference implementation repos"
+      added: "2026-03-11"
+
+    - id: STD-CHANGE-001
+      title: "Change Management Integration"
+      intent: "Link all production deployments to approved change requests"
+      requirements:
+      - "All production deployments must be linked to an approved ITSM change request (CRQ number)"
+      - "The CI/CD pipeline must validate CRQ status before proceeding with deployment (deploy-setup)"
+      - "CRQ status must be tracked and reported through deployment completion (deploy-complete)"
+      - "Deployment status (success/failure) must be reported back to the ITSM system"
+      - "Deployment scheduling must support approved change windows: NOW, NOW +2, TODAY 10:00, TODAY 21:00, TOMORROW 06:00"
+      source: "HelloWorld reference implementation repos"
+      added: "2026-03-11"
+
+    - id: STD-RELEASE-001
+      title: "Versioning and Release Management"
+      intent: "Consistent versioning, tagging, and release documentation"
+      requirements:
+      - "All repositories must use semantic versioning (SemVer x.y.z)"
+      - "Automated tagging must occur on merge to the main branch (patch version auto-bump)"
+      - "Custom tags may be provided for minor/major version bumps"
+      - "Release notes must be auto-generated from merged pull requests when a release is published"
+      - "All repositories must use the main branch as the default branch"
+      source: "HelloWorld reference implementation repos"
+      added: "2026-03-11"
+
+    - id: STD-DEPLOY-001
+      title: "Deployment Pipeline baseline"
+      intent: "Standardize deployment stages, pre-flight checks, and notifications"
+      requirements:
+      - "Production deployments must include pre-flight connectivity checks against target endpoints before deployment begins"
+      - "Deployment pipeline stages: nexus-download → preflight-checks → deploy-setup → deploy → deploy-complete → notify"
+      - "Failed deployments must auto-create a GitHub Issue assigned to the deploying engineer"
+      - "Deployment notifications must be sent on completion (success or failure) via configured channels (email, webhook, or GitHub Issues)"
+      - "Deployment status and duration must be tracked and reported"
+      - "Non-production deployments (develop, innovation) must follow the same pipeline structure as production"
+      source: "HelloWorld reference implementation repos"
+      added: "2026-03-11"
+
+    - id: STD-REPO-001
+      title: "Repository Governance"
+      intent: "Enforce consistent repository structure and code ownership"
+      requirements:
+      - "All repositories must have a CODEOWNERS file defining team ownership for code review routing"
+      - "All repositories must have a pull request template (.github/pull_request_template.md)"
+      - "All repositories must have issue templates (.github/ISSUE_TEMPLATE/) for bug reports and feature requests"
+      - "Branch protection must be enabled on the main branch requiring pull request review before merge"
+      - "All repositories must have a .github/copilot-instructions.md documenting build commands, project structure, and validation workflows for AI coding assistants"
+      - "Dependabot must be configured (.github/dependabot.yml) for all package ecosystems used in the repo (npm, pip, maven, nuget, docker, github-actions, terraform)"
+      source: "HelloWorld reference implementation repos (JSP-Maven gold standard)"
+      added: "2026-03-11"
+
+    - id: STD-ATTESTATION-001
+      title: "Build Attestation and Provenance"
+      intent: "Ensure build artifact integrity and supply chain traceability"
+      requirements:
+      - "All build pipelines must generate SLSA build provenance attestations"
+      - "Build workflows must request attestations: write and id-token: write permissions"
+      - "Build artifacts must be signed and verifiable"
+      - "Attestation records must link artifacts to their source commit, build workflow, and builder identity"
+      source: "HelloWorld reference implementation repos, STD-SUPPLY-001 implementation"
+      added: "2026-03-11"
+
+    - id: STD-IAC-001
+      title: "Infrastructure-as-Code Security"
+      intent: "Ensure IaC templates are secure before deployment"
+      requirements:
+      - "All Terraform code must undergo static security analysis (AquaSec/Trivy or equivalent) on every pull request"
+      - "All Bicep/ARM templates must undergo static security analysis on every pull request"
+      - "Critical and High severity findings must block deployment"
+      - "YAML configuration files must pass linting validation (yamllint or equivalent)"
+      - "IaC security scan results must be reported as PR check status"
+      source: "HelloWorld reference implementation repos (Azure-APIM, Azure-IaC)"
+      added: "2026-03-11"
+
+    - id: STD-APITEST-001
+      title: "API Contract Testing"
+      intent: "Validate API behavior against defined contracts"
+      requirements:
+      - "API services must include contract tests using Postman/Newman collections or equivalent"
+      - "API contract tests must run on pull requests to API-related branches"
+      - "Test results must be reported in multiple formats (JSON, JUnit, HTML)"
+      - "API gateway endpoints must have subscription key and authentication testing"
+      - "Test timeouts must be configured (default: 30 seconds per request)"
+      source: "HelloWorld reference implementation repos (Azure-APIM)"
+      added: "2026-03-11"
+
+    - id: STD-CONTTEST-001
+      title: "Continuous Testing"
+      intent: "Ensure ongoing quality validation beyond pull request checks"
+      requirements:
+      - "Critical path E2E tests must run on a recurring schedule (minimum weekly) in addition to PR-triggered runs"
+      - "Playwright is the recommended E2E testing framework for web applications"
+      - "Scheduled tests must target deployed environments (not local builds)"
+      - "Scheduled test failures must generate notifications or issues for triage"
+      source: "HelloWorld reference implementation repos (NodeJS-Angular, Azure-APIM)"
+      added: "2026-03-11"
+
+    - id: STD-AIDEV-001
+      title: "AI-Assisted Development"
+      intent: "Standardize AI coding assistant configuration across repositories"
+      requirements:
+      - "All repositories should include .github/copilot-instructions.md with project-specific guidance"
+      - "Copilot instructions must document: bootstrap/build commands with expected timing, project structure, key file locations, validation sequences, and known issues"
+      - "AI-generated code must pass the same quality gates (SonarQube, linting, tests) as human-written code"
+      - "AI-generated code must be reviewed by a human before merge"
+      source: "HelloWorld reference implementation repos (JSP-Maven)"
+      added: "2026-03-11"
+
+    optional_recommended:
+    - id: STD-ACC-001
+      title: "Accessibility"
+      requirements:
+      - "Web interfaces should meet WCAG 2.1 Level AA standards where applicable"
+      - "Consider accessibility in design phase"
+
+  # ---------------------------------------------------------------------------
+  # Cell matrix: 4 stacks × 5 surfaces = 20 cells
+  # ---------------------------------------------------------------------------
+  matrix:
+    # =========================================================================
+    # SURFACE: SPA (Single Page Application)
+    # =========================================================================
+    surface.spa:
+      stack.react_node_ts_js:
+        cell_id: "CELL-SPA-REACT-001"
+        support_level: "preferred"
+        intended_use_cases:
+        - "Rich interactive web applications"
+        - "Admin dashboards and portals"
+        - "Real-time collaborative applications"
+        - "Progressive Web Apps (PWA)"
+        anti_use_cases:
+        - "Simple content-focused websites"
+        - "SEO-critical marketing sites"
+        approved_technologies:
+          languages:
+          - "TypeScript 5.0+ (Required)"
+          - "JavaScript (ES2022+)"
+          frontend:
+            frameworks:
+            - "React 18+ (Recommended)"
+            - "Vue 3 (Alternative)"
+            - "Angular 17+ (For enterprise)"
+            styling:
+            - "CSS3"
+            - "Sass/SCSS"
+            - "Tailwind CSS"
+            - "Styled Components"
+            state_management:
+            - "React Query (Server state)"
+            - "Zustand (Client state)"
+            - "Redux Toolkit"
+            testing:
+            - "Jest (Recommended)"
+            - "Vitest"
+            - "React Testing Library"
+            - "Playwright (E2E)"
+          backend:
+            runtime:
+            - "Node.js 18+ LTS"
+            - "Node.js 20+ LTS"
+            frameworks:
+            - "NestJS (Enterprise-grade, Recommended)"
+            - "Express (Lightweight)"
+            testing:
+            - "Jest (Recommended)"
+            - "Vitest"
+            - "Supertest (API testing)"
+          data:
+            databases:
+            - "PostgreSQL 14+ (Primary RDBMS)"
+            - "Azure Cosmos DB (NoSQL, caching)"
+            orm:
+            - "Prisma (Recommended)"
+            - "TypeORM"
+          messaging:
+          - "RabbitMQ 3.12+ (Primary message broker)"
+          - "Azure Service Bus"
+          authn_authz:
+            libraries:
+            - "jsonwebtoken (JWT)"
+            - "passport (Authentication middleware)"
+            - "bcryptjs (Password hashing)"
+            approach:
+            - "JWT for stateless APIs"
+            - "OAuth 2.0 + OpenID Connect for SSO"
+          observability:
+            logging:
+            - "Winston"
+            - "Pino"
+            metrics:
+            - "Prometheus client"
+            tracing:
+            - "OpenTelemetry"
+          tooling:
+            package_manager:
+            - "npm"
+            - "yarn"
+            - "pnpm"
+            linting:
+            - "ESLint (Required)"
+            formatting:
+            - "Prettier (Recommended)"
+            build:
+            - "Vite (Recommended)"
+            - "Webpack"
+            - "esbuild"
+          deployment:
+            patterns:
+            - "Docker containers (Required)"
+            - "Kubernetes 1.28+"
+            - "Azure Static Web Apps"
+            hosting:
+            - "Azure (Primary)"
+            - "AWS (Secondary)"
+          notes:
+          - "TypeScript required for all new projects"
+          - "Vite recommended for fast build times"
+          - "Client-side routing via React Router or similar"
+        required_standards_additional:
+        - "STD-SPA-001: CORS policy documented"
+        - "STD-SPA-002: CSP headers configured"
+        - "STD-SPA-003: Client-side routing implemented"
+        overrides: []
+
+      stack.python:
+        cell_id: "CELL-SPA-PYTHON-001"
+        support_level: "allowed"
+        intended_use_cases:
+        - "Backend APIs for SPAs"
+        - "Data-heavy API backends"
+        - "ML/AI-integrated APIs"
+        anti_use_cases:
+        - "Frontend rendering (use React/Vue/Angular)"
+        approved_technologies:
+          languages:
+          - "Python 3.11+"
+          - "Python 3.12+"
+          backend:
+            frameworks:
+            - "FastAPI (Recommended - async, auto-docs)"
+            - "Flask (Lightweight)"
+            testing:
+            - "pytest (Required)"
+            - "pytest-asyncio"
+            - "httpx (Async testing)"
+          data:
+            databases:
+            - "PostgreSQL 14+"
+            - "Azure Cosmos DB (NoSQL)"
+            orm:
+            - "SQLAlchemy 2.0+"
+            - "Tortoise ORM (Async)"
+          authn_authz:
+            libraries:
+            - "PyJWT"
+            - "python-jose"
+            - "bcrypt"
+            approach:
+            - "JWT for stateless APIs"
+            - "OAuth 2.0 via authlib"
+          observability:
+            logging:
+            - "structlog"
+            metrics:
+            - "prometheus-client"
+            tracing:
+            - "OpenTelemetry"
+          tooling:
+            env:
+            - "uv (Recommended)"
+            - "poetry"
+            linting:
+            - "ruff (Recommended)"
+            type_checking:
+            - "mypy"
+            - "pyright"
+          deployment:
+            patterns:
+            - "Docker containers (Required)"
+            - "Azure Container Apps"
+            hosting:
+            - "Azure (Primary)"
+          notes:
+          - "FastAPI recommended for async API backends"
+          - "Type hints required"
+          - "CORS configuration required for SPA integration"
+        required_standards_additional:
+        - "STD-PYTHON-001: Type hints required"
+        - "STD-PYTHON-002: Virtual environments required"
+        overrides: []
+
+      stack.dotnet:
+        cell_id: "CELL-SPA-DOTNET-001"
+        support_level: "not_supported"
+        intended_use_cases: []
+        anti_use_cases:
+        - "SPA frontend development (use React/Vue/Angular)"
+        approved_technologies: {}
+        required_standards_additional: []
+        overrides: []
+        notes:
+        - ".NET not recommended for SPA frontends"
+        - "Consider ASP.NET Core for WebApp backend instead"
+
+      stack.swift:
+        cell_id: "CELL-SPA-SWIFT-001"
+        support_level: "not_supported"
+        intended_use_cases: []
+        anti_use_cases:
+        - "Web development"
+        approved_technologies: {}
+        required_standards_additional: []
+        overrides: []
+        notes:
+        - "Swift is for iOS/macOS development only"
+
+    # =========================================================================
+    # SURFACE: WEBAPP (Traditional Web)
+    # =========================================================================
+    surface.webapp:
+      stack.react_node_ts_js:
+        cell_id: "CELL-WEBAPP-REACT-001"
+        support_level: "allowed"
+        intended_use_cases:
+        - "Server-rendered web applications"
+        - "Content-heavy websites"
+        - "SEO-critical web applications"
+        - "Marketing sites"
+        anti_use_cases:
+        - "Rich interactive dashboards (use SPA)"
+        approved_technologies:
+          languages:
+          - "TypeScript 5.0+"
+          - "JavaScript (ES2022+)"
+          frontend:
+            frameworks:
+            - "Next.js 14+ (Recommended for React SSR)"
+            - "Remix (Alternative React framework)"
+            styling:
+            - "CSS3"
+            - "Sass/SCSS"
+            - "Tailwind CSS"
+            testing:
+            - "Jest"
+            - "Playwright (E2E)"
+          backend:
+            runtime:
+            - "Node.js 18+ LTS"
+            - "Node.js 20+ LTS"
+            frameworks:
+            - "NestJS (API backend)"
+            - "Express"
+            testing:
+            - "Jest"
+            - "Supertest"
+          data:
+            databases:
+            - "PostgreSQL 14+"
+            - "Azure Cosmos DB (NoSQL)"
+            orm:
+            - "Prisma (Recommended)"
+            - "TypeORM"
+          messaging:
+          - "RabbitMQ 3.12+"
+          - "Azure Service Bus"
+          authn_authz:
+            libraries:
+            - "jsonwebtoken (JWT)"
+            - "passport"
+            - "bcryptjs"
+            approach:
+            - "JWT for APIs"
+            - "Session-based for traditional apps"
+          observability:
+            logging:
+            - "Winston"
+            - "Pino"
+            metrics:
+            - "Prometheus client"
+            tracing:
+            - "OpenTelemetry"
+          tooling:
+            package_manager:
+            - "npm"
+            - "yarn"
+            - "pnpm"
+            linting:
+            - "ESLint (Required)"
+            formatting:
+            - "Prettier"
+            build:
+            - "Next.js built-in"
+            - "Vite"
+          deployment:
+            patterns:
+            - "Docker containers (Required)"
+            - "Kubernetes 1.28+"
+            - "Azure App Service"
+            hosting:
+            - "Azure (Primary)"
+            - "AWS (Secondary)"
+          notes:
+          - "Next.js recommended for SSR/SSG workloads"
+          - "TypeScript required for new projects"
+        required_standards_additional:
+        - "STD-WEBAPP-001: CORS policy documented"
+        - "STD-WEBAPP-002: CSP headers configured"
+        - "STD-WEBAPP-003: SEO meta tags implemented"
+        overrides: []
+
+      stack.python:
+        cell_id: "CELL-WEBAPP-PYTHON-001"
+        support_level: "allowed"
+        intended_use_cases:
+        - "Backend-for-frontend APIs"
+        - "Data-heavy web applications"
+        - "Internal tools and dashboards"
+        - "ML/AI-integrated web services"
+        anti_use_cases:
+        - "Pure frontend (use React/Vue)"
+        approved_technologies:
+          languages:
+          - "Python 3.11+"
+          - "Python 3.12+"
+          backend:
+            frameworks:
+            - "FastAPI (Recommended - async, auto-docs)"
+            - "Django (Full-featured, admin interface)"
+            - "Flask (Lightweight, microservices)"
+            testing:
+            - "pytest (Required)"
+            - "pytest-asyncio"
+            - "pytest-cov"
+          data:
+            databases:
+            - "PostgreSQL 14+"
+            - "Azure Cosmos DB (NoSQL)"
+            orm:
+            - "SQLAlchemy 2.0+"
+            - "Django ORM"
+          authn_authz:
+            libraries:
+            - "PyJWT"
+            - "python-jose"
+            - "bcrypt"
+            - "argon2-cffi"
+            approach:
+            - "JWT for APIs"
+            - "OAuth 2.0 via authlib"
+          observability:
+            logging:
+            - "structlog"
+            - "python-json-logger"
+            metrics:
+            - "prometheus-client"
+            tracing:
+            - "OpenTelemetry"
+          tooling:
+            env:
+            - "uv (Recommended)"
+            - "poetry"
+            linting:
+            - "ruff (Recommended)"
+            formatting:
+            - "ruff format"
+            type_checking:
+            - "mypy"
+            - "pyright"
+          deployment:
+            patterns:
+            - "Docker containers (Required)"
+            - "Kubernetes 1.28+"
+            - "Azure Container Apps"
+            hosting:
+            - "Azure (Primary)"
+            - "AWS (Secondary)"
+          notes:
+          - "FastAPI recommended for new projects"
+          - "Django for apps needing admin interface"
+          - "Type hints required"
+        required_standards_additional:
+        - "STD-PYTHON-001: Type hints required"
+        - "STD-PYTHON-002: Virtual environments required"
+        overrides: []
+
+      stack.dotnet:
+        cell_id: "CELL-WEBAPP-DOTNET-001"
+        support_level: "allowed"
+        intended_use_cases:
+        - "Azure-native web applications"
+        - "Enterprise web applications"
+        - ".NET ecosystem integration"
+        anti_use_cases:
+        - "Greenfield without .NET requirements"
+        approved_technologies:
+          languages:
+          - "C# 12+"
+          backend:
+            frameworks:
+            - "ASP.NET Core 8+"
+            - "Minimal APIs"
+            - "Blazor (Server-side rendering)"
+            testing:
+            - "xUnit (Recommended)"
+            - "NUnit"
+          data:
+            databases:
+            - "PostgreSQL 14+"
+            - "SQL Server (If required)"
+            - "Azure Cosmos DB (NoSQL)"
+            orm:
+            - "Entity Framework Core 8+"
+            - "Dapper"
+          authn_authz:
+            libraries:
+            - "Microsoft.AspNetCore.Authentication.JwtBearer"
+            - "IdentityServer"
+            approach:
+            - "JWT for APIs"
+            - "Azure AD integration"
+          observability:
+            logging:
+            - "Serilog"
+            metrics:
+            - "Application Insights"
+            tracing:
+            - "Application Insights"
+          tooling:
+            package_manager:
+            - "NuGet"
+            linting:
+            - "StyleCop"
+            - "Roslyn analyzers"
+          deployment:
+            patterns:
+            - "Docker containers (Required)"
+            - "Azure App Service"
+            hosting:
+            - "Azure (Preferred)"
+          notes:
+          - "Requires architecture approval for new projects"
+        required_standards_additional:
+        - "STD-DOTNET-001: Nullable reference types enabled"
+        overrides: []
+
+      stack.swift:
+        cell_id: "CELL-WEBAPP-SWIFT-001"
+        support_level: "not_supported"
+        intended_use_cases: []
+        anti_use_cases:
+        - "Web development"
+        approved_technologies: {}
+        required_standards_additional: []
+        overrides: []
+        notes:
+        - "Swift is for iOS/macOS development only"
+
+    # =========================================================================
+    # SURFACE: MOBILE
+    # =========================================================================
+    surface.mobile:
+      stack.react_node_ts_js:
+        cell_id: "CELL-MOBILE-REACT-001"
+        support_level: "preferred"
+        intended_use_cases:
+        - "Cross-platform iOS and Android apps"
+        - "Field worker applications"
+        - "Customer mobile applications"
+        - "Offline-first architectures"
+        anti_use_cases:
+        - "Performance-critical apps requiring heavy native APIs"
+        approved_technologies:
+          languages:
+          - "TypeScript 5.0+ (Required)"
+          mobile:
+            frameworks:
+            - "React Native 0.72+"
+            - "Expo SDK 49+ (Recommended)"
+            ui_libraries:
+            - "React Native Paper"
+            - "React Native Elements"
+            navigation:
+            - "React Navigation"
+            state_management:
+            - "Redux Toolkit"
+            - "Zustand"
+            - "React Query"
+            testing:
+            - "Jest"
+            - "Detox (E2E, Required)"
+            offline:
+            - "WatermelonDB"
+            - "AsyncStorage"
+            - "MMKV"
+          backend:
+            runtime:
+            - "Python 3.11+ with FastAPI (Recommended)"
+            - "Node.js 18+ with NestJS"
+          data:
+            databases:
+            - "PostgreSQL 14+ (Backend)"
+            - "Azure Cosmos DB (NoSQL)"
+            - "SQLite (On-device)"
+          authn_authz:
+            libraries:
+            - "@react-native-async-storage/async-storage"
+            - "react-native-keychain"
+            approach:
+            - "JWT with refresh tokens"
+            - "OAuth 2.0 via react-native-app-auth"
+          observability:
+            logging:
+            - "react-native-logs"
+            metrics:
+            - "Azure Application Insights"
+            - "Sentry"
+          tooling:
+            package_manager:
+            - "npm"
+            - "yarn"
+            linting:
+            - "ESLint (Required)"
+            build:
+            - "Metro bundler"
+            - "EAS Build (Expo)"
+          deployment:
+            patterns:
+            - "Over-the-air updates via Expo"
+            - "App Store / Play Store"
+            hosting:
+            - "Backend on Azure (Primary)"
+          notes:
+          - "TypeScript required"
+          - "Offline-first architecture required for field apps"
+          - "Test on both iOS and Android"
+        required_standards_additional:
+        - "STD-MOBILE-001: Offline-first for field apps"
+        - "STD-MOBILE-002: Touch target 44x44pt minimum"
+        - "STD-MOBILE-003: Battery testing required"
+        overrides: []
+
+      stack.python:
+        cell_id: "CELL-MOBILE-PYTHON-001"
+        support_level: "not_supported"
+        intended_use_cases: []
+        anti_use_cases:
+        - "Mobile UI development"
+        approved_technologies: {}
+        required_standards_additional: []
+        overrides: []
+        notes:
+        - "Python not suitable for mobile UI"
+        - "Python may be used for backend APIs"
+
+      stack.dotnet:
+        cell_id: "CELL-MOBILE-DOTNET-001"
+        support_level: "not_supported"
+        intended_use_cases: []
+        anti_use_cases:
+        - "New mobile applications"
+        approved_technologies: {}
+        required_standards_additional: []
+        overrides: []
+        notes:
+        - ".NET MAUI not recommended for new mobile projects"
+        - "Prefer React Native for cross-platform mobile"
+
+      stack.swift:
+        cell_id: "CELL-MOBILE-SWIFT-001"
+        support_level: "preferred"
+        intended_use_cases:
+        - "Native iOS applications"
+        - "iOS-specific features"
+        - "High-performance iOS apps"
+        anti_use_cases:
+        - "Cross-platform requirements (use React Native)"
+        approved_technologies:
+          languages:
+          - "Swift 5.9+"
+          mobile:
+            frameworks:
+            - "SwiftUI (Recommended)"
+            - "UIKit (Legacy support)"
+            navigation:
+            - "NavigationStack (SwiftUI)"
+            - "UINavigationController (UIKit)"
+            state_management:
+            - "@State, @Binding (SwiftUI)"
+            - "Combine"
+            testing:
+            - "XCTest (Unit testing)"
+            - "XCUITest (UI testing)"
+            networking:
+            - "URLSession"
+            - "Alamofire"
+          data:
+            databases:
+            - "Core Data"
+            - "SQLite"
+            - "Realm"
+            backend:
+            - "PostgreSQL 14+ (Backend API)"
+          authn_authz:
+            libraries:
+            - "Keychain Services"
+            - "AppAuth-iOS (OAuth 2.0)"
+            approach:
+            - "JWT with refresh tokens"
+            - "OAuth 2.0 for SSO"
+          observability:
+            logging:
+            - "OSLog"
+            metrics:
+            - "Azure Application Insights"
+            crash_reporting:
+            - "Crashlytics"
+          tooling:
+            ide:
+            - "Xcode 15+"
+            package_manager:
+            - "Swift Package Manager (Recommended)"
+            - "CocoaPods (Legacy)"
+            linting:
+            - "SwiftLint (Required)"
+          deployment:
+            patterns:
+            - "App Store distribution"
+            - "TestFlight (Beta testing)"
+            hosting:
+            - "Backend on Azure (Primary)"
+          notes:
+          - "Requires architecture approval for native iOS"
+          - "Consider React Native for cross-platform needs"
+          - "SwiftUI preferred for new iOS projects"
+        required_standards_additional:
+        - "STD-IOS-001: SwiftUI preferred for new projects"
+        - "STD-IOS-002: Min iOS 15+ deployment target"
+        - "STD-MOBILE-002: Touch target 44x44pt minimum"
+        overrides: []
+
+    # =========================================================================
+    # SURFACE: WINDOWS APP
+    # =========================================================================
+    surface.windows_app:
+      stack.react_node_ts_js:
+        cell_id: "CELL-WINDOWS-REACT-001"
+        support_level: "not_supported"
+        intended_use_cases: []
+        anti_use_cases:
+        - "Windows desktop applications (use .NET)"
+        approved_technologies: {}
+        required_standards_additional: []
+        overrides: []
+        notes:
+        - "Electron not recommended for Windows apps"
+        - "Prefer .NET for Windows desktop"
+
+      stack.python:
+        cell_id: "CELL-WINDOWS-PYTHON-001"
+        support_level: "not_supported"
+        intended_use_cases: []
+        anti_use_cases:
+        - "Windows desktop applications (use .NET)"
+        approved_technologies: {}
+        required_standards_additional: []
+        overrides: []
+        notes:
+        - "Python not recommended for Windows desktop UI"
+        - "Prefer .NET for Windows desktop"
+
+      stack.dotnet:
+        cell_id: "CELL-WINDOWS-DOTNET-001"
+        support_level: "preferred"
+        intended_use_cases:
+        - "Windows desktop applications"
+        - "Enterprise desktop tools"
+        - "Line of Business (LOB) applications"
+        anti_use_cases:
+        - "Cross-platform desktop apps"
+        approved_technologies:
+          languages:
+          - "C# 12+"
+          desktop:
+            frameworks:
+            - "WPF (Windows Presentation Foundation)"
+            - "WinUI 3 (Modern Windows apps)"
+            - ".NET MAUI (If cross-platform needed)"
+            testing:
+            - "xUnit"
+            - "FlaUI (UI automation)"
+          data:
+            databases:
+            - "SQLite (Local)"
+            - "SQL Server LocalDB"
+            - "PostgreSQL 14+ (Backend)"
+            orm:
+            - "Entity Framework Core 8+"
+          authn_authz:
+            libraries:
+            - "Microsoft.Identity.Client (MSAL)"
+            approach:
+            - "JWT for backend APIs"
+            - "Azure AD integrated authentication"
+          observability:
+            logging:
+            - "Serilog"
+            metrics:
+            - "Application Insights"
+          tooling:
+            package_manager:
+            - "NuGet"
+            linting:
+            - "StyleCop"
+            - "Roslyn analyzers"
+          deployment:
+            patterns:
+            - "ClickOnce"
+            - "MSIX packaging"
+            distribution:
+            - "Internal distribution"
+            - "Microsoft Store"
+          notes:
+          - "Windows-first strategy"
+          - "Code signing required"
+        required_standards_additional:
+        - "STD-WINDOWS-001: Code signing required"
+        - "STD-WINDOWS-002: Auto-update mechanism"
+        overrides: []
+
+      stack.swift:
+        cell_id: "CELL-WINDOWS-SWIFT-001"
+        support_level: "not_supported"
+        intended_use_cases: []
+        anti_use_cases:
+        - "Windows development"
+        approved_technologies: {}
+        required_standards_additional: []
+        overrides: []
+        notes:
+        - "Swift is for iOS/macOS only"
+
+    # =========================================================================
+    # SURFACE: AI/VOICE
+    # =========================================================================
+    surface.ai_voice:
+      stack.react_node_ts_js:
+        cell_id: "CELL-AIVOICE-REACT-001"
+        support_level: "allowed"
+        intended_use_cases:
+        - "Voice assistant integrations"
+        - "Alexa skills"
+        - "AI dashboard interfaces"
+        - "ML model deployment UIs"
+        anti_use_cases:
+        - "Heavy ML training workloads (use Python)"
+        approved_technologies:
+          languages:
+          - "TypeScript 5.0+"
+          - "JavaScript"
+          voice:
+            platforms:
+            - "Alexa Skills Kit"
+            - "Google Actions SDK"
+            frameworks:
+            - "Jovo Framework"
+          backend:
+            runtime:
+            - "Node.js 18+ LTS"
+            frameworks:
+            - "AWS Lambda"
+            - "Azure Functions"
+            - "Express"
+          data:
+            databases:
+            - "PostgreSQL 14+"
+            - "Azure Cosmos DB (NoSQL)"
+          authn_authz:
+            approach:
+            - "OAuth 2.0 for account linking"
+          observability:
+            logging:
+            - "Winston"
+            - "Azure Monitor"
+          deployment:
+            patterns:
+            - "Serverless functions"
+            - "Docker containers"
+            hosting:
+            - "Azure (Primary)"
+            - "AWS Lambda (For Alexa)"
+          notes:
+          - "Good for voice interfaces and ML dashboards"
+          - "Requires architecture review"
+        required_standards_additional:
+        - "STD-AIVOICE-001: Privacy controls documented"
+        - "STD-AIVOICE-002: Data retention policy"
+        overrides: []
+
+      stack.python:
+        cell_id: "CELL-AIVOICE-PYTHON-001"
+        support_level: "preferred"
+        intended_use_cases:
+        - "ML/AI model training and deployment"
+        - "NLP processing"
+        - "Speech-to-text / text-to-speech"
+        - "Voice backend APIs"
+        - "AI/ML pipelines"
+        anti_use_cases:
+        - "Platform-specific voice skills (prefer Node.js)"
+        approved_technologies:
+          languages:
+          - "Python 3.11+"
+          - "Python 3.12+"
+          ml_ai:
+            frameworks:
+            - "PyTorch (Deep learning)"
+            - "TensorFlow (Deep learning)"
+            - "scikit-learn (Classical ML)"
+            - "Transformers (NLP, Hugging Face)"
+            - "spaCy (NLP)"
+            - "OpenAI SDK"
+            serving:
+            - "FastAPI (Model serving)"
+            - "TorchServe"
+            - "TensorFlow Serving"
+          voice:
+            libraries:
+            - "SpeechRecognition"
+            - "pyttsx3"
+            - "Azure Speech SDK"
+          backend:
+            frameworks:
+            - "FastAPI (Recommended)"
+            - "Flask"
+          data:
+            databases:
+            - "PostgreSQL 14+"
+            - "Azure Cosmos DB (NoSQL)"
+            vector_db:
+            - "Azure AI Search"
+            - "Pinecone"
+          authn_authz:
+            libraries:
+            - "PyJWT"
+            approach:
+            - "JWT for APIs"
+          observability:
+            logging:
+            - "structlog"
+            metrics:
+            - "prometheus-client"
+            experiment_tracking:
+            - "MLflow"
+            - "Azure ML"
+          tooling:
+            env:
+            - "uv (Recommended)"
+            - "poetry"
+            linting:
+            - "ruff (Recommended)"
+            type_checking:
+            - "mypy"
+          deployment:
+            patterns:
+            - "Docker containers"
+            - "Azure ML"
+            - "Azure Functions"
+            hosting:
+            - "Azure (Primary)"
+          notes:
+          - "Primary stack for AI/ML workloads"
+          - "Type hints required"
+        required_standards_additional:
+        - "STD-PYTHON-001: Type hints required"
+        - "STD-AIML-001: Model versioning required"
+        - "STD-AIML-002: Experiment tracking required"
+        - "STD-AIVOICE-001: Privacy controls documented"
+        overrides: []
+
+      stack.dotnet:
+        cell_id: "CELL-AIVOICE-DOTNET-001"
+        support_level: "not_supported"
+        intended_use_cases: []
+        anti_use_cases:
+        - "AI/ML workloads (use Python)"
+        - "Voice interfaces (use Python or Node.js)"
+        approved_technologies: {}
+        required_standards_additional: []
+        overrides: []
+        notes:
+        - ".NET not recommended for AI/ML workloads"
+        - "ML.NET exists but Python ecosystem is preferred"
+
+      stack.swift:
+        cell_id: "CELL-AIVOICE-SWIFT-001"
+        support_level: "not_supported"
+        intended_use_cases: []
+        anti_use_cases:
+        - "AI/ML workloads (use Python)"
+        approved_technologies: {}
+        required_standards_additional: []
+        overrides: []
+        notes:
+        - "Swift not used for AI/ML backend workloads"
+        - "Core ML exists for on-device iOS ML"
+
+  # ---------------------------------------------------------------------------
+  # Decision rules
+  # ---------------------------------------------------------------------------
+  decision_rules:
+  - id: RULE-CHOICE-001
+    statement: >
+      For each required delivery surface, choose the highest-preference stack whose cell support_level is 'preferred' or 'allowed'. Refer to stack_preference_order in preferences section.
+    example: >
+      For SPA: prefer stack.react_node_ts_js (preferred) over stack.python (allowed).
+
+  - id: RULE-CHOICE-002
+    statement: >
+      If no stack is 'preferred' or 'allowed' for a required surface, select the best 'exception' option and flag for architecture approval.
+
+  - id: RULE-CHOICE-003
+    statement: >
+      Always include all global_standards.required plus the selected cell's required_standards_additional in the solution's standards output.
+
+  - id: RULE-CHOICE-004
+    statement: >
+      For multi-surface solutions (e.g., SPA + Mobile), prefer architectures that allow shared backend/API standards while allowing per-surface UI standards.
+
+  - id: RULE-CHOICE-005
+    statement: >
+      When selecting databases, prefer PostgreSQL 14+ as primary RDBMS. Azure Cosmos DB should be used for NoSQL, caching, and session storage.
+
+  - id: RULE-CHOICE-006
+    statement: >
+      For authentication, prefer JWT for stateless APIs. Use OAuth 2.0 + OpenID Connect for SSO. Microsoft Entra ID (Azure AD) is primary identity provider.
+
+  - id: RULE-OUTPUT-001
+    statement: >
+      Output must include: (1) selected stack per surface with cell_id reference, (2) all applicable standards (by ID + title), (3) approved technologies per selected cells, (4) architecture approach, (5) exceptions/risks section.
+
+  # ---------------------------------------------------------------------------
+  # Exception process
+  # ---------------------------------------------------------------------------
+  exception_process:
+    summary: >
+      Any 'exception' or 'not_supported' selection requires architecture review approval before implementation.
+
+    required_artifacts:
+    - name: "Architecture Decision Record (ADR)"
+      description: "Document decision, context, alternatives, rationale"
+
+    - name: "Security review notes"
+      description: "For security-sensitive changes"
+
+    - name: "TECH_STACK_DECISION.md"
+      description: "Project-level technology decisions documentation"
+
+    approval_requirements:
+    - level: "Architecture Review"
+      required_for:
+      - "Any stack with support_level: exception"
+      - "Any stack with support_level: not_supported"
+      - "NoSQL databases beyond Azure Cosmos DB"
+      - "Native mobile development (Swift/Kotlin)"
+      approvers: [ "Enterprise Architecture Team" ]
+
+    - level: "Security Approval"
+      required_for:
+      - "Changes to authentication/authorization"
+      - "Changes to secrets management"
+      approvers: [ "Security Team" ]
+
+    timeline:
+    - "Architecture review: 5-10 business days"
+    - "Security review: 3-5 business days"
+
+    escalation:
+      contact: "enterprise-architecture@sce.com"
+      slack: "#architecture-standards"
+
+  # ---------------------------------------------------------------------------
+  # Deprecation
+  # ---------------------------------------------------------------------------
+  deprecation:
+    technologies_deprecated:
+    - name: "Java Stack"
+      status: "Fully deprecated"
+      action: "Migrate to Python, .NET, or React+Node"
+      deadline: "2026-12-31"
+      rationale: "Not in approved matrix; limited use cases at SCE"
+
+    - name: "Node.js <18"
+      status: "Deprecated"
+      action: "Upgrade to Node.js 18+ LTS or 20+ LTS"
+      deadline: "2026-06-30"
+
+  # ---------------------------------------------------------------------------
+  # Maintenance
+  # ---------------------------------------------------------------------------
+  maintenance:
+    review_cycle: "Quarterly"
+    next_review: "2026-04-15"
+
+    contact:
+      email: "enterprise-architecture@sce.com"
+      slack: "#architecture-standards"
+
+    version_history:
+    - version: "3.1.0"
+      date: "2026-01-21"
+      author: "Enterprise Architecture Team"
+      changes: >
+        Added 7 new global standards from Cybersecurity Administrative Standard v9 alignment: STD-VULN-001 (Vulnerability Management), STD-ASSET-001 (Asset Management/CMDB), STD-DATA-001 (Data Security/Encryption), STD-CONFIG-001 (Configuration Management), STD-PATCH-001 (Software/Hardware Maintenance), STD-SDLC-001 (Secure SDLC), STD-SUPPLY-001 (Supply Chain Security). Enhanced STD-OBS-001 with logging review requirements.
+
+    - version: "3.0.0"
+      date: "2026-01-21"
+      author: "Enterprise Architecture Team"
+      changes: >
+        Major restructuring: Split Web into SPA/WebApp, removed Desktop, added Windows App, renamed Voice to AI/Voice, removed Java stack, added Swift stack for iOS. Matrix now 4 stacks × 5 surfaces = 20 cells matching whiteboard design.
+
+    - version: "2.1.0"
+      date: "2026-01-21"
+      author: "Enterprise Architecture Team"
+      changes: "Updated NoSQL database from Redis to Azure Cosmos DB"
+
+    - version: "2.0.0"
+      date: "2026-01-21"
+      author: "Enterprise Architecture Team"
+      changes: "Converted to YAML matrix format from markdown"

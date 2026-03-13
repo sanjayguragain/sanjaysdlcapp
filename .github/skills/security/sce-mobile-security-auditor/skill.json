@@ -1,0 +1,11 @@
+{
+  "name": "mobile-security-auditor",
+  "version": "1.0.0",
+  "author": "SDLC Security Team",
+  "description": "Assess mobile app security for iOS, Android, React Native, Flutter, and Xamarin including storage, networking, and obfuscation",
+  "category": "Security & Compliance",
+  "tags": ["security", "mobile-security", "ios", "android", "react-native"],
+  "license": "MIT",
+  "compatibility": ["claude-code", "codex", "amp", "opencode"],
+  "allowed-tools": ["Bash", "Read", "Grep"]
+}

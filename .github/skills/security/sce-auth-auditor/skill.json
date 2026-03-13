@@ -1,0 +1,11 @@
+{
+  "name": "auth-auditor",
+  "version": "1.0.0",
+  "author": "SDLC Security Team",
+  "description": "Review authentication and authorization implementations including JWT, OAuth, RBAC, and MFA",
+  "category": "Security & Compliance",
+  "tags": ["security", "authentication", "authorization", "jwt", "oauth", "rbac"],
+  "license": "MIT",
+  "compatibility": ["claude-code", "codex", "amp", "opencode"],
+  "allowed-tools": ["Bash", "Read", "Grep"]
+}

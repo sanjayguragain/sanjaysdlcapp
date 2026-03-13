@@ -1,0 +1,12 @@
+{
+  "name": "sce-agent-skill-analyzer",
+  "version": "1.0.0",
+  "author": "Agent Skills Team",
+  "description": "Analyzes repository for existing agents and skills to support reuse-first strategy. Reports reuse/adapt/compose/create options and flags standards gaps (JSON-first artifacts, Markdown companions for long text, and logprob-based confidence requirements) for governance workflows.",
+  "category": "Agent Engineering",
+  "tags": ["development", "analysis", "reuse-strategy", "agent-engineering", "architecture", "standards"],
+  "license": "MIT",
+  "compatibility": ["1 - Strategy & Planning - AI Agent Builder", "6 - Change & Release - DevOps Workflow Agent", "development-tools"],
+  "allowed-tools": ["Bash", "Read", "Grep"],
+  "repository": "https://github.com/EdisonInternational/HelloWorld-AgentSkills"
+}

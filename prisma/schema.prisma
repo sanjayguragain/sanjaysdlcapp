@@ -23,14 +23,15 @@ model User {
 }
 
 model Project {
-  id          String   @id @default(uuid())
-  name        String
-  description String?
-  status      String   @default("active")
-  phase       String   @default("PRD Generation")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  ownerId     String
+  id           String   @id @default(uuid())
+  name         String
+  description  String?
+  stakeholders String?  // JSON: [{ name: string, role: string }]
+  status       String   @default("active")
+  phase        String   @default("PRD Generation")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  ownerId      String
 
   owner      User          @relation(fields: [ownerId], references: [id])
   artifacts  Artifact[]

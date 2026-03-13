@@ -1,0 +1,11 @@
+{
+  "name": "sce-threat-intel-osint",
+  "version": "1.0.0",
+  "author": "SDLC Security Team",
+  "description": "Threat intelligence gathering focused on IOCs, malware analysis, threat actor profiling, and campaign tracking",
+  "category": "Security & Intelligence",
+  "tags": ["osint", "threat-intelligence", "ioc", "malware", "threat-actors"],
+  "license": "MIT",
+  "compatibility": ["claude-code", "codex", "amp", "opencode"],
+  "allowed-tools": ["Bash", "Read", "Grep"]
+}

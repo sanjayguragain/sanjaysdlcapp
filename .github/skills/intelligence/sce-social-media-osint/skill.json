@@ -1,0 +1,11 @@
+{
+  "name": "social-media-osint",
+  "version": "1.0.0",
+  "author": "SDLC Security Team",
+  "description": "Social media intelligence including profile discovery, post analysis, network mapping, and sentiment analysis",
+  "category": "Security & Intelligence",
+  "tags": ["osint", "socmint", "social-media", "profile-analysis", "sentiment-analysis"],
+  "license": "MIT",
+  "compatibility": ["claude-code", "codex", "amp", "opencode"],
+  "allowed-tools": ["Bash", "Read", "Grep"]
+}

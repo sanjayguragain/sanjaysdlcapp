@@ -1,0 +1,11 @@
+{
+  "name": "sce-web-infrastructure-auditor",
+  "version": "1.0.0",
+  "author": "SDLC Security Team",
+  "description": "Analyze web infrastructure security including SSL/TLS, DNS, HTTP headers, and technology stack",
+  "category": "Security & Compliance",
+  "tags": ["security", "web-infrastructure", "ssl-tls", "dns", "http-headers"],
+  "license": "MIT",
+  "compatibility": ["claude-code", "codex", "amp", "opencode"],
+  "allowed-tools": ["Bash", "Read", "Grep"]
+}

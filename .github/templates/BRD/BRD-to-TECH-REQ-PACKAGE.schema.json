@@ -1,0 +1,328 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/templates/BRD/BRD-to-TECH-REQ-PACKAGE.schema.json",
+  "title": "BRD to Technical Requirement Package",
+  "description": "Canonical downstream package for normalized BRD requirements, technical requirements, traceability, and gap reporting while preserving the source BRD as immutable.",
+  "type": "object",
+  "required": [
+    "generated_by",
+    "generated_at",
+    "initiative_name",
+    "source_brd",
+    "normalized_brd_requirements",
+    "technical_requirements",
+    "coverage_summary"
+  ],
+  "properties": {
+    "generated_by": {
+      "type": "string",
+      "const": "3 - Analysis - BRD Technical Requirement Generator"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "initiative_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_brd": {
+      "type": "object",
+      "required": ["path", "immutable"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "immutable": {
+          "type": "boolean",
+          "const": true
+        },
+        "external_owner": {
+          "type": "string"
+        },
+        "version_or_date": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "normalized_brd_requirements": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/normalizedBrdRequirement" }
+    },
+    "technical_requirements": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/technicalRequirement" }
+    },
+    "traceability_gaps": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/traceabilityGap" },
+      "default": []
+    },
+    "coverage_summary": {
+      "$ref": "#/$defs/coverageSummary"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "sourceReference": {
+      "type": "object",
+      "required": ["section"],
+      "properties": {
+        "section": { "type": "string" },
+        "line_start": { "type": "integer", "minimum": 1 },
+        "line_end": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "normalizedBrdRequirement": {
+      "type": "object",
+      "required": [
+        "normalized_brd_requirement_id",
+        "source_text",
+        "normalized_text",
+        "source_reference",
+        "normalization_status",
+        "normalization_rationale"
+      ],
+      "properties": {
+        "normalized_brd_requirement_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_brd_requirement_id": {
+          "type": ["string", "null"]
+        },
+        "source_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "normalized_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_reference": {
+          "$ref": "#/$defs/sourceReference"
+        },
+        "normalization_status": {
+          "type": "string",
+          "enum": ["explicit", "normalized_from_narrative", "ambiguous"]
+        },
+        "normalization_rationale": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "traceability": {
+      "type": "object",
+      "required": [
+        "brd_requirement_id",
+        "brd_requirement_text",
+        "trace_type",
+        "trace_rationale"
+      ],
+      "properties": {
+        "brd_requirement_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "brd_requirement_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "trace_type": {
+          "type": "string",
+          "enum": ["direct", "derived_from"]
+        },
+        "trace_rationale": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "verificationOrValidation": {
+      "type": "object",
+      "required": ["type", "activity"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "activity": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "technicalRequirement": {
+      "type": "object",
+      "required": [
+        "requirement_id",
+        "requirement_statement",
+        "requirement_type",
+        "primary_attribute",
+        "secondary_attributes",
+        "quality_category",
+        "labels",
+        "traceability",
+        "scenario",
+        "stimulus",
+        "environment",
+        "response",
+        "response_measure",
+        "verification_approach",
+        "validation_approach"
+      ],
+      "properties": {
+        "requirement_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requirement_statement": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requirement_type": {
+          "type": "string",
+          "enum": ["direct_technical_requirement", "derived_technical_requirement"]
+        },
+        "primary_attribute": {
+          "$ref": "#/$defs/qualityAttribute"
+        },
+        "secondary_attributes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/qualityAttribute" },
+          "default": []
+        },
+        "quality_category": {
+          "$ref": "#/$defs/qualityCategory"
+        },
+        "labels": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "traceability": {
+          "$ref": "#/$defs/traceability"
+        },
+        "scenario": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stimulus": {
+          "type": "string",
+          "minLength": 1
+        },
+        "environment": {
+          "type": "string",
+          "minLength": 1
+        },
+        "response": {
+          "type": "string",
+          "minLength": 1
+        },
+        "response_measure": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verification_approach": {
+          "$ref": "#/$defs/verificationOrValidation"
+        },
+        "validation_approach": {
+          "$ref": "#/$defs/verificationOrValidation"
+        }
+      },
+      "additionalProperties": false
+    },
+    "traceabilityGap": {
+      "type": "object",
+      "required": [
+        "candidate_technical_requirement",
+        "why_it_appears_necessary",
+        "missing_brd_requirement",
+        "recommended_action"
+      ],
+      "properties": {
+        "candidate_technical_requirement": {
+          "type": "string",
+          "minLength": 1
+        },
+        "why_it_appears_necessary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "missing_brd_requirement": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recommended_action": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "coverageSummary": {
+      "type": "object",
+      "required": [
+        "brd_requirement_count",
+        "technical_requirement_count",
+        "fully_traced_brd_requirements",
+        "partially_traced_brd_requirements",
+        "untraced_technical_requirements",
+        "readiness"
+      ],
+      "properties": {
+        "brd_requirement_count": { "type": "integer", "minimum": 0 },
+        "technical_requirement_count": { "type": "integer", "minimum": 0 },
+        "fully_traced_brd_requirements": { "type": "integer", "minimum": 0 },
+        "partially_traced_brd_requirements": { "type": "integer", "minimum": 0 },
+        "untraced_technical_requirements": { "type": "integer", "minimum": 0 },
+        "readiness": {
+          "type": "string",
+          "enum": ["ready", "ready_with_fixes", "not_ready"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "qualityAttribute": {
+      "type": "string",
+      "enum": [
+        "Agility",
+        "Availability",
+        "Deployability",
+        "Extensibility",
+        "Elasticity",
+        "Adaptability",
+        "Fault Tolerance",
+        "Modularity",
+        "Feasibility",
+        "Performance",
+        "Reliability",
+        "Scalability",
+        "Security",
+        "Simplicity",
+        "Testability",
+        "Usability",
+        "Interoperability"
+      ]
+    },
+    "qualityCategory": {
+      "type": "string",
+      "enum": [
+        "Operational Qualities",
+        "Structural Qualities",
+        "Evolution Qualities",
+        "Program / Delivery Qualities"
+      ]
+    }
+  }
+}

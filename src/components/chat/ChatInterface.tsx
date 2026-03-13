@@ -1,9 +1,18 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { Button } from "@/components/ui/Button";
 import { ArtifactType, ARTIFACT_DEFINITIONS } from "@/types";
+import { DocumentUpload } from "@/components/documents/DocumentUpload";
+
+interface Document {
+  id: string;
+  name: string;
+  type: string;
+  content: string;
+  createdAt: string;
+}
 
 interface Message {
   id: string;
@@ -19,6 +28,9 @@ interface ChatInterfaceProps {
   onSendMessage: (content: string) => Promise<void>;
   onGenerateArtifact: (type: ArtifactType) => Promise<void>;
   isLoading: boolean;
+  documents?: Document[];
+  onDocumentUploaded?: (doc: Document) => void;
+  onDocumentDeleted?: (id: string) => void;
 }
 
 const QUICK_ACTIONS = [
@@ -30,15 +42,28 @@ const QUICK_ACTIONS = [
 ];
 
 export function ChatInterface({
+  projectId,
   messages,
   onSendMessage,
   onGenerateArtifact,
   isLoading,
+  documents = [],
+  onDocumentUploaded,
+  onDocumentDeleted,
 }: ChatInterfaceProps) {
   const [input, setInput] = useState("");
   const [showArtifactMenu, setShowArtifactMenu] = useState(false);
+  const [showDocPanel, setShowDocPanel] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleDocUpload = useCallback((doc: Document) => {
+    onDocumentUploaded?.(doc);
+  }, [onDocumentUploaded]);
+
+  const handleDocDelete = useCallback((id: string) => {
+    onDocumentDeleted?.(id);
+  }, [onDocumentDeleted]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -79,6 +104,28 @@ export function ChatInterface({
           </div>
         </div>
 
+        {/* Document upload button */}
+        <button
+          onClick={() => setShowDocPanel(!showDocPanel)}
+          title="Upload supporting documents"
+          className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors mr-2 ${
+            showDocPanel
+              ? "bg-indigo-50 border-indigo-200 text-indigo-700"
+              : "bg-white border-gray-200 text-gray-600 hover:border-indigo-300 hover:text-indigo-600"
+          }`}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+          </svg>
+          Docs
+          {documents.length > 0 && (
+            <span className="ml-0.5 bg-indigo-600 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+              {documents.length}
+            </span>
+          )}
+        </button>
+
         {/* Generate artifact button */}
         <div className="relative">
           <Button
@@ -113,6 +160,32 @@ export function ChatInterface({
           )}
         </div>
       </div>
+
+      {/* Document upload panel */}
+      {showDocPanel && (
+        <div className="border-b border-gray-200 bg-white px-5 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-medium text-gray-800">Supporting Documents</p>
+            <button
+              onClick={() => setShowDocPanel(false)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <p className="text-xs text-gray-500 mb-3">
+            Upload meeting transcripts, emails, or briefs — the AI uses these to generate more accurate artifacts.
+          </p>
+          <DocumentUpload
+            projectId={projectId}
+            documents={documents}
+            onUpload={handleDocUpload}
+            onDelete={handleDocDelete}
+          />
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">

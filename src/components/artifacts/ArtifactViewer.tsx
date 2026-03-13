@@ -25,7 +25,12 @@ interface ArtifactViewerProps {
   approvals?: Approval[];
   onApprove?: (comment: string) => Promise<void>;
   onReject?: (comment: string) => Promise<void>;
-  onSubmitForApproval?: () => Promise<void>;
+  onSubmitForApproval?: (content: string) => Promise<{
+    ok: boolean;
+    error?: string;
+    openQuestions?: string[];
+    qualityPct?: number;
+  }>;
   onEdit?: () => void;
 }
 
@@ -148,6 +153,7 @@ export function ArtifactViewer({
   const [comment, setComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmittingForApproval, setIsSubmittingForApproval] = useState(false);
+  const [openQuestionsWarning, setOpenQuestionsWarning] = useState<string[]>([]);
 
   const def = ARTIFACT_DEFINITIONS.find((d) => d.type === type);
   const statusColor = STATUS_COLORS[status] || "bg-gray-100 text-gray-700";
@@ -180,8 +186,16 @@ export function ArtifactViewer({
   const handleSubmitForApproval = async () => {
     if (!onSubmitForApproval) return;
     setIsSubmittingForApproval(true);
-    await onSubmitForApproval();
-    setIsSubmittingForApproval(false);
+    try {
+      const result = await onSubmitForApproval(content);
+      if (!result?.ok) {
+        setOpenQuestionsWarning(result.openQuestions ?? (result.error ? [result.error] : []));
+        return;
+      }
+      setOpenQuestionsWarning([]);
+    } finally {
+      setIsSubmittingForApproval(false);
+    }
   };
 
   return (
@@ -275,6 +289,46 @@ export function ArtifactViewer({
           />
         </div>
       </div>
+
+      {/* Open questions blocking banner */}
+      {openQuestionsWarning.length > 0 && (
+        <div className="bg-white rounded-xl border border-amber-200 overflow-hidden">
+          <div className="px-6 py-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-2">
+                  <svg className="w-5 h-5 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                  </svg>
+                  <p className="text-sm font-semibold text-amber-800">
+                    {openQuestionsWarning.length} open question{openQuestionsWarning.length !== 1 ? "s" : ""} must be resolved before submitting for approval
+                  </p>
+                </div>
+                <ul className="space-y-1.5 mb-3 ml-7">
+                  {openQuestionsWarning.map((q, i) => (
+                    <li key={i} className="text-sm text-amber-700 flex items-start gap-2">
+                      <span className="text-amber-400 shrink-0">•</span>
+                      <span>{q}</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-sm text-amber-600 ml-7">
+                  Click <strong>Edit in Chat</strong> to fill in these sections, then submit again.
+                </p>
+              </div>
+              <button
+                onClick={() => setOpenQuestionsWarning([])}
+                className="text-amber-400 hover:text-amber-600 transition-colors shrink-0"
+                aria-label="Dismiss"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Approval History */}
       {approvals.length > 0 && (

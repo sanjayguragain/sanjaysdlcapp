@@ -112,16 +112,33 @@ export default function ArtifactDetailPage() {
     if (res.ok) await loadArtifact();
   };
 
-  const handleSubmitForApproval = async () => {
+  const handleSubmitForApproval = async (content: string) => {
     const res = await fetch(
       `/api/projects/${projectId}/artifacts/${artifactId}`,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "awaiting_approval" }),
+        body: JSON.stringify({ status: "awaiting_approval", content }),
       }
     );
-    if (res.ok) await loadArtifact();
+    if (res.ok) {
+      await loadArtifact();
+      return { ok: true } as const;
+    }
+
+    let err: any = null;
+    try {
+      err = await res.json();
+    } catch {
+      // ignore
+    }
+
+    return {
+      ok: false,
+      error: err?.error ?? `Submit for approval failed (${res.status}).`,
+      openQuestions: err?.openQuestions,
+      qualityPct: err?.qualityPct,
+    } as const;
   };
 
   if (loading) {

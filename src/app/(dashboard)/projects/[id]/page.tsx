@@ -59,6 +59,7 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [descExpanded, setDescExpanded] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -119,6 +120,14 @@ export default function ProjectDetailPage() {
   const existingTypes = new Set(project.artifacts.map((a) => a.type));
   const unlockedTypes = getUnlockedTypes(project.artifacts);
 
+  // Long-description handling: >160 chars or multi-line → collapsible card
+  const desc = project.description ?? "";
+  const isLongDesc = desc.length > 160 || desc.includes("\n");
+  const descPreview = isLongDesc
+    ? desc.slice(0, 160).replace(/\s+\S*$/, "") + "…"
+    : desc;
+  const descParagraphs = desc.split(/\n+/).filter(Boolean);
+
   // Artifacts not yet generated: split into unlocked (ready) vs locked
   const pendingDefs = ARTIFACT_DEFINITIONS.filter((d) => !existingTypes.has(d.type));
   const readyDefs = pendingDefs.filter((d) => unlockedTypes.has(d.type));
@@ -128,7 +137,6 @@ export default function ProjectDetailPage() {
     <div className="p-8">
       <Header
         title={project.name}
-        subtitle={project.description || "No description"}
         actions={
           <div className="flex items-center gap-2">
             <Badge className="bg-indigo-100 text-indigo-700">
@@ -154,6 +162,35 @@ export default function ProjectDetailPage() {
           </div>
         }
       />
+
+      {/* Project Description — collapsible if long */}
+      {desc && (
+        <div className="mb-6 bg-white border border-gray-200 rounded-xl px-5 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              {!isLongDesc ? (
+                <p className="text-sm text-gray-600 leading-relaxed">{desc}</p>
+              ) : descExpanded ? (
+                <div className="space-y-2">
+                  {descParagraphs.map((para, i) => (
+                    <p key={i} className="text-sm text-gray-600 leading-relaxed">{para}</p>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-600 leading-relaxed">{descPreview}</p>
+              )}
+            </div>
+            {isLongDesc && (
+              <button
+                onClick={() => setDescExpanded((v) => !v)}
+                className="shrink-0 text-xs font-medium text-indigo-600 hover:text-indigo-800 whitespace-nowrap mt-0.5 transition-colors"
+              >
+                {descExpanded ? "Show less" : "Show more"}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Progress Tracker */}
       <div className="mt-6">

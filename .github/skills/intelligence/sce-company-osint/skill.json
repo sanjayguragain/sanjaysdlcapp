@@ -1,0 +1,11 @@
+{
+  "name": "sce-company-osint",
+  "version": "1.0.0",
+  "author": "SDLC Security Team",
+  "description": "Company intelligence including business records, employee discovery, technology stack, and partnerships",
+  "category": "Security & Intelligence",
+  "tags": ["osint", "corpint", "company-research", "business-intelligence", "tech-stack"],
+  "license": "MIT",
+  "compatibility": ["claude-code", "codex", "amp", "opencode"],
+  "allowed-tools": ["Bash", "Read", "Grep"]
+}

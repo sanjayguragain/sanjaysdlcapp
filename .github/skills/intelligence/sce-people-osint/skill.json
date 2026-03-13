@@ -1,0 +1,11 @@
+{
+  "name": "people-osint",
+  "version": "1.0.0",
+  "author": "SDLC Security Team",
+  "description": "People search and background intelligence including public records, social profiles, and employment history",
+  "category": "Security & Intelligence",
+  "tags": ["osint", "people-search", "background-check", "public-records", "humint"],
+  "license": "MIT",
+  "compatibility": ["claude-code", "codex", "amp", "opencode"],
+  "allowed-tools": ["Bash", "Read", "Grep"]
+}

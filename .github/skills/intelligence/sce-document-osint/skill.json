@@ -1,0 +1,11 @@
+{
+  "name": "sce-document-osint",
+  "version": "1.0.0",
+  "author": "SDLC Security Team",
+  "description": "Document metadata extraction and analysis including author information, EXIF data, and hidden content",
+  "category": "Security & Intelligence",
+  "tags": ["osint", "metadata", "document-analysis", "forensics", "exif"],
+  "license": "MIT",
+  "compatibility": ["claude-code", "codex", "amp", "opencode"],
+  "allowed-tools": ["Bash", "Read", "Grep"]
+}

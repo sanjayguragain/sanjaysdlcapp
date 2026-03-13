@@ -15,26 +15,52 @@ export interface SidePanelArtifact {
   confidenceScore?: number | null;
 }
 
+interface VersionItem {
+  id: string;
+  version: number;
+  content: string;
+  savedAt: string;
+}
+
 interface ArtifactSidePanelProps {
   artifact: SidePanelArtifact | null;
+  projectId?: string;
   isGenerating?: boolean;
   onClose: () => void;
   onSave?: (content: string) => void;
   onImprove?: () => void;
+  onAutofill?: () => void;
+  onSubmitForApproval?: (content: string) => Promise<{
+    ok: boolean;
+    error?: string;
+    openQuestions?: string[];
+    qualityPct?: number;
+  }>;
+  isAutofilling?: boolean;
 }
 
 export function ArtifactSidePanel({
   artifact,
+  projectId,
   isGenerating,
   onClose,
   onSave,
   onImprove,
+  onAutofill,
+  onSubmitForApproval,
+  isAutofilling = false,
 }: ArtifactSidePanelProps) {
   const [editedContent, setEditedContent] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [viewMode, setViewMode] = useState<"edit" | "preview">("edit");
+  const [viewMode, setViewMode] = useState<"edit" | "preview" | "history">("edit");
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+  const [versions, setVersions] = useState<VersionItem[]>([]);
+  const [loadingVersions, setLoadingVersions] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [isSubmittingForApproval, setIsSubmittingForApproval] = useState(false);
+  const [openQuestionsWarning, setOpenQuestionsWarning] = useState<string[]>([]);
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -45,6 +71,17 @@ export function ArtifactSidePanel({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  // Load versions when history tab is opened
+  useEffect(() => {
+    if (viewMode !== "history" || !artifact || !projectId) return;
+    setLoadingVersions(true);
+    fetch(`/api/projects/${projectId}/artifacts/${artifact.id}/versions`)
+      .then((r) => (r.ok ? r.json() : { versions: [] }))
+      .then((data) => setVersions(data.versions ?? []))
+      .catch(() => setVersions([]))
+      .finally(() => setLoadingVersions(false));
+  }, [viewMode, artifact, projectId]);
 
   if (!artifact && !isGenerating) return null;
 
@@ -59,6 +96,22 @@ export function ArtifactSidePanel({
       onSave(editedContent);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSubmitForApproval = async () => {
+    if (!onSubmitForApproval || !artifact) return;
+    const currentContent = editedContent ?? artifact.content;
+    setIsSubmittingForApproval(true);
+    try {
+      const result = await onSubmitForApproval(currentContent);
+      if (!result?.ok) {
+        setOpenQuestionsWarning(result.openQuestions ?? (result.error ? [result.error] : []));
+        return;
+      }
+      setOpenQuestionsWarning([]);
+    } finally {
+      setIsSubmittingForApproval(false);
     }
   };
 
@@ -337,20 +390,32 @@ export function ArtifactSidePanel({
             </span>
           )}
 
-          {/* Confidence score */}
-          {artifact?.confidenceScore != null && (
-            <div className="flex items-center gap-1">
-              <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500"
-                  style={{ width: `${Math.round(artifact.confidenceScore * 100)}%` }}
-                />
+          {/* Quality score */}
+          {artifact?.confidenceScore != null && (() => {
+            const pct = artifact.confidenceScore > 1
+              ? Math.round(artifact.confidenceScore)
+              : Math.round(artifact.confidenceScore * 100);
+            const barColor =
+              pct >= 80 ? "from-green-500 to-emerald-500" :
+              pct >= 65 ? "from-yellow-400 to-amber-500" :
+              pct >= 40 ? "from-orange-400 to-amber-400" :
+              "from-red-400 to-red-600";
+            return (
+              <div
+                className="flex items-center gap-1"
+                title={`Quality: ${pct}% — completeness, specificity, and unresolved gaps (IEEE 830)`}
+              >
+                <span className="text-xs text-gray-400">Quality</span>
+                <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full bg-gradient-to-r ${barColor}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <span className="text-xs text-gray-500">{pct}%</span>
               </div>
-              <span className="text-xs text-gray-500">
-                {Math.round(artifact.confidenceScore * 100)}%
-              </span>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Close button */}
           <button
@@ -367,7 +432,7 @@ export function ArtifactSidePanel({
       {/* Action Buttons */}
       {artifact && (
         <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 bg-gray-50 shrink-0">
-          {/* Edit/Preview toggle */}
+          {/* Edit/Preview/History toggle */}
           <div className="flex items-center bg-gray-200 rounded-md p-0.5 mr-1">
             <button
               onClick={() => setViewMode("edit")}
@@ -389,6 +454,18 @@ export function ArtifactSidePanel({
             >
               Preview
             </button>
+            {projectId && (
+              <button
+                onClick={() => setViewMode("history")}
+                className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+                  viewMode === "history"
+                    ? "bg-white text-gray-800 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                History
+              </button>
+            )}
           </div>
           <button
             onClick={handleSave}
@@ -434,15 +511,45 @@ export function ArtifactSidePanel({
               </div>
             )}
           </div>
-          {onImprove && (
+          {onAutofill && (
             <button
-              onClick={onImprove}
-              className="px-3 py-1.5 text-xs font-medium rounded-md border border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition-colors flex items-center gap-1"
+              onClick={onAutofill}
+              disabled={isAutofilling}
+              title="Answer all open questions using industry best practices and rewrite the document"
+              className="px-3 py-1.5 text-xs font-medium rounded-md border border-violet-200 text-violet-700 hover:bg-violet-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+            >
+              {isAutofilling ? (
+                <>
+                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 100 16v-4l-3 3 3 3v-4a8 8 0 01-8-8z" />
+                  </svg>
+                  Autofilling…
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                  </svg>
+                  Autofill Best Practices
+                </>
+              )}
+            </button>
+          )}
+
+          {onSubmitForApproval &&
+            artifact.status !== "approved" &&
+            artifact.status !== "awaiting_approval" &&
+            artifact.status !== "blocked" && (
+            <button
+              onClick={handleSubmitForApproval}
+              disabled={isSubmittingForApproval}
+              className="px-3 py-1.5 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              Improve with AI
+              {isSubmittingForApproval ? "Submitting..." : "Submit for Approval"}
             </button>
           )}
           <div className="flex-1" />
@@ -459,6 +566,44 @@ export function ArtifactSidePanel({
           >
             {artifact.status.replace(/_/g, " ")}
           </span>
+        </div>
+      )}
+
+      {/* Open questions warning — shown when user tries to submit with unresolved placeholders */}
+      {openQuestionsWarning.length > 0 && (
+        <div className="mx-4 my-2 p-3 rounded-lg border border-amber-200 bg-amber-50 shrink-0">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <svg className="w-4 h-4 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+                <p className="text-xs font-semibold text-amber-800">
+                  {openQuestionsWarning.length} open question{openQuestionsWarning.length !== 1 ? "s" : ""} must be resolved before submission
+                </p>
+              </div>
+              <ul className="space-y-1 mb-2">
+                {openQuestionsWarning.map((q, i) => (
+                  <li key={i} className="text-xs text-amber-700 flex items-start gap-1.5">
+                    <span className="text-amber-400 shrink-0 mt-0.5">•</span>
+                    <span>{q}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-amber-600">
+                Edit the document to fill in all <em>[To be confirmed]</em> sections, then submit again.
+              </p>
+            </div>
+            <button
+              onClick={() => setOpenQuestionsWarning([])}
+              className="text-amber-400 hover:text-amber-600 transition-colors shrink-0 mt-0.5"
+              aria-label="Dismiss"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
       )}
 
@@ -480,7 +625,107 @@ export function ArtifactSidePanel({
             </div>
           </div>
         ) : artifact ? (
-          viewMode === "preview" ? (
+          viewMode === "history" ? (
+            <div className="flex-1 overflow-y-auto p-4">
+              {loadingVersions ? (
+                <div className="flex items-center justify-center py-10">
+                  <div className="w-6 h-6 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+                </div>
+              ) : versions.length === 0 ? (
+                <div className="text-center py-10">
+                  <p className="text-sm text-gray-500">No saved versions yet.</p>
+                  <p className="text-xs text-gray-400 mt-1">Versions are created automatically on each save.</p>
+                </div>
+              ) : (
+                <ol className="space-y-2">
+                  {/* Current version at top */}
+                  <li className="flex items-center justify-between p-3 rounded-lg bg-indigo-50 border border-indigo-200">
+                    <div>
+                      <span className="text-xs font-semibold text-indigo-700">v{artifact.version}</span>
+                      <span className="ml-2 text-xs text-indigo-500">Current</span>
+                    </div>
+                  </li>
+                  {versions.map((v) => {
+                    const isSelected = selectedVersionId === v.id;
+                    return (
+                      <li
+                        key={v.id}
+                        className={`rounded-lg border transition-colors ${
+                          isSelected
+                            ? "border-indigo-300 bg-indigo-50"
+                            : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                        }`}
+                      >
+                        {/* Header row — click to toggle content preview */}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedVersionId(isSelected ? null : v.id)}
+                          className="w-full flex items-center justify-between p-3 text-left"
+                        >
+                          <div>
+                            <span className="text-xs font-semibold text-gray-700">v{v.version}</span>
+                            <span className="ml-2 text-xs text-gray-400">
+                              {new Date(v.savedAt).toLocaleDateString(undefined, {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              })}{" "}
+                              {new Date(v.savedAt).toLocaleTimeString(undefined, {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          </div>
+                          <svg
+                            className={`w-3.5 h-3.5 text-gray-400 transition-transform ${
+                              isSelected ? "rotate-180" : ""
+                            }`}
+                            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+
+                        {/* Expanded content */}
+                        {isSelected && (
+                          <div className="border-t border-indigo-200">
+                            <div
+                              className="prose prose-sm text-xs text-gray-700 leading-relaxed px-3 pt-3 pb-2 max-h-72 overflow-y-auto"
+                              dangerouslySetInnerHTML={{
+                                __html: /<[a-z][\s\S]*>/i.test(v.content)
+                                  ? v.content
+                                  : renderPreview(v.content),
+                              }}
+                            />
+                            <div className="flex justify-end px-3 pb-3">
+                              <button
+                                disabled={restoringId === v.id}
+                                onClick={async () => {
+                                  if (!onSave) return;
+                                  setRestoringId(v.id);
+                                  try {
+                                    await onSave(v.content);
+                                    setEditedContent(null);
+                                    setSelectedVersionId(null);
+                                    setViewMode("edit");
+                                  } finally {
+                                    setRestoringId(null);
+                                  }
+                                }}
+                                className="text-xs font-medium text-indigo-600 hover:text-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {restoringId === v.id ? "Restoring…" : "Restore this version"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+            </div>
+          ) : viewMode === "preview" ? (
             <div className="flex-1 overflow-y-auto p-6">
               <div
                 className="prose text-sm text-gray-800 leading-relaxed"

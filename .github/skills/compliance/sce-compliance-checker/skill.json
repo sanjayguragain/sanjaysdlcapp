@@ -1,0 +1,11 @@
+{
+  "name": "compliance-checker",
+  "version": "1.0.0",
+  "author": "SDLC Security Team",
+  "description": "Validate compliance with GDPR, PCI-DSS, HIPAA, SOC 2, and ISO 27001 standards",
+  "category": "Security & Compliance",
+  "tags": ["security", "compliance", "gdpr", "pci-dss", "hipaa", "soc2"],
+  "license": "MIT",
+  "compatibility": ["claude-code", "codex", "amp", "opencode"],
+  "allowed-tools": ["Bash", "Read", "Grep"]
+}

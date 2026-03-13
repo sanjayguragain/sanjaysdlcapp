@@ -1,0 +1,11 @@
+{
+  "name": "sce-username-osint",
+  "version": "1.0.0",
+  "author": "SDLC Security Team",
+  "description": "Username enumeration and footprint discovery across online platforms",
+  "category": "Security & Intelligence",
+  "tags": ["osint", "username-enumeration", "reconnaissance", "platform-discovery", "user-profiling"],
+  "license": "MIT",
+  "compatibility": ["claude-code", "codex", "amp", "opencode"],
+  "allowed-tools": ["Bash", "Read", "Grep"]
+}

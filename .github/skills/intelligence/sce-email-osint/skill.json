@@ -1,0 +1,11 @@
+{
+  "name": "email-osint",
+  "version": "1.0.0",
+  "author": "SDLC Security Team",
+  "description": "Email intelligence including validation, breach exposure, linked accounts, and reputation",
+  "category": "Security & Intelligence",
+  "tags": ["osint", "email-intelligence", "breach-data", "validation", "reputation"],
+  "license": "MIT",
+  "compatibility": ["claude-code", "codex", "amp", "opencode"],
+  "allowed-tools": ["Bash", "Read", "Grep"]
+}

@@ -37,13 +37,26 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { name, description } = body;
+  const { name, description, stakeholders } = body;
 
   if (!name || typeof name !== "string" || name.trim().length === 0) {
     return NextResponse.json(
       { error: "Project name is required" },
       { status: 400 }
     );
+  }
+
+  // Validate + serialize stakeholders
+  let stakeholdersJson: string | null = null;
+  if (Array.isArray(stakeholders) && stakeholders.length > 0) {
+    const clean = stakeholders
+      .filter((s: unknown) => s && typeof s === "object")
+      .map((s: { name?: unknown; role?: unknown }) => ({
+        name: String(s.name ?? "").trim(),
+        role: String(s.role ?? "").trim(),
+      }))
+      .filter((s) => s.name);
+    if (clean.length > 0) stakeholdersJson = JSON.stringify(clean);
   }
 
   // Get or create a default user
@@ -62,6 +75,7 @@ export async function POST(req: NextRequest) {
     data: {
       name: name.trim(),
       description: description?.trim() || null,
+      stakeholders: stakeholdersJson,
       status: "active",
       phase: "initiation",
       ownerId: user.id,

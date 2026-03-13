@@ -1,0 +1,25 @@
+{
+  "name": "sce-prd-generator",
+  "version": "1.0.0",
+  "description": "Generates a full Product Requirements Document (PRD) in Markdown following PRD Template 4 conventions.",
+  "author": "Agent Skills Team",
+  "license": "MIT",
+  "tags": [
+    "product-management",
+    "requirements-engineering",
+    "documentation",
+    "prd",
+    "generator"
+  ],
+  "compatibility": {
+    "minimum_agent_version": "1.0.0",
+    "agents": ["all"]
+  },
+  "required_tools": ["python"],
+  "allowed_tools": ["Read", "Write", "Edit"],
+  "external_dependencies": [],
+  "resource_files": [
+    "../../../templates/PRD/PRD-{product-name-kebab-case}.md",
+    "resources/prd_template_4_skeleton.md"
+  ]
+}

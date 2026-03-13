@@ -1,0 +1,11 @@
+{
+  "name": "sce-input-validation-checker",
+  "version": "1.0.0",
+  "author": "SDLC Security Team",
+  "description": "Identify injection vulnerabilities including SQL injection, XSS, command injection, and validate input/output handling",
+  "category": "Security & Compliance",
+  "tags": ["security", "injection", "sql-injection", "xss", "input-validation"],
+  "license": "MIT",
+  "compatibility": ["claude-code", "codex", "amp", "opencode"],
+  "allowed-tools": ["Bash", "Read", "Grep"]
+}

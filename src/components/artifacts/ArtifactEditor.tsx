@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
@@ -102,7 +102,14 @@ function ToolbarDivider() {
   return <div className="w-px h-5 bg-gray-200 mx-1" />;
 }
 
+function isHtml(str: string): boolean {
+  return /<[a-z][\s\S]*>/i.test(str);
+}
+
 export function ArtifactEditor({ content, onChange, editable = true }: ArtifactEditorProps) {
+  // Track the last content set from props to avoid update loops
+  const lastExternalContent = useRef<string>("");
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -120,10 +127,12 @@ export function ArtifactEditor({ content, onChange, editable = true }: ArtifactE
       TaskList,
       TaskItem.configure({ nested: true }),
     ],
-    content: markdownToHtml(content),
+    content: isHtml(content) ? content : markdownToHtml(content),
     editable,
     onUpdate: ({ editor: ed }) => {
-      onChange?.(ed.getHTML());
+      const html = ed.getHTML();
+      lastExternalContent.current = html;
+      onChange?.(html);
     },
     editorProps: {
       attributes: {
@@ -132,6 +141,15 @@ export function ArtifactEditor({ content, onChange, editable = true }: ArtifactE
       },
     },
   });
+
+  // Sync editor content when the prop changes externally (e.g. from chat artifact update)
+  useEffect(() => {
+    if (!editor) return;
+    if (content === lastExternalContent.current) return;
+    lastExternalContent.current = content;
+    const newHtml = isHtml(content) ? content : markdownToHtml(content);
+    editor.commands.setContent(newHtml);
+  }, [content, editor]);
 
   const setHeading = useCallback(
     (level: 1 | 2 | 3) => {

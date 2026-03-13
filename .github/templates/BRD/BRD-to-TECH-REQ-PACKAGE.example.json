@@ -1,0 +1,134 @@
+{
+  "generated_by": "3 - Analysis - BRD Technical Requirement Generator",
+  "generated_at": "2026-03-12T10:00:00Z",
+  "initiative_name": "grid-outage-operations-modernization",
+  "source_brd": {
+    "path": "docs/BRD/BRD-grid-outage-operations-modernization.md",
+    "immutable": true,
+    "external_owner": "enterprise-product-management",
+    "version_or_date": "2026-03-01",
+    "notes": "Source BRD preserved as received from the upstream business team."
+  },
+  "normalized_brd_requirements": [
+    {
+      "normalized_brd_requirement_id": "NBR-001",
+      "source_brd_requirement_id": "BRD-OPS-001",
+      "source_text": "The outage management capability shall remain available during regional infrastructure failures.",
+      "normalized_text": "The outage management solution must maintain service continuity during regional infrastructure failure scenarios.",
+      "source_reference": {
+        "section": "4.2 Service Continuity",
+        "line_start": 118,
+        "line_end": 121
+      },
+      "normalization_status": "explicit",
+      "normalization_rationale": "Original BRD requirement is explicit and only needed structural normalization for downstream traceability."
+    },
+    {
+      "normalized_brd_requirement_id": "NBR-002",
+      "source_brd_requirement_id": null,
+      "source_text": "Operators must be able to continue dispatch activities during major outage events without loss of situational awareness.",
+      "normalized_text": "The solution must support continued operator dispatch workflows during major outage events with preserved operational visibility.",
+      "source_reference": {
+        "section": "3.1 Business Need",
+        "line_start": 52,
+        "line_end": 55
+      },
+      "normalization_status": "normalized_from_narrative",
+      "normalization_rationale": "The source BRD expressed the need as narrative business prose without a formal requirement identifier, so a surrogate normalization ID was assigned in the companion artifact only."
+    }
+  ],
+  "technical_requirements": [
+    {
+      "requirement_id": "OMS-REQ-C01-001",
+      "requirement_statement": "The outage management platform shall fail over to a secondary region within 60 seconds during a primary region outage.",
+      "requirement_type": "derived_technical_requirement",
+      "primary_attribute": "Availability",
+      "secondary_attributes": [
+        "Reliability",
+        "Fault Tolerance"
+      ],
+      "quality_category": "Operational Qualities",
+      "labels": [
+        "qattr:availability",
+        "qattr:reliability",
+        "qattr:fault-tolerance",
+        "qcat:operational-quality",
+        "source:brd",
+        "type:derived"
+      ],
+      "traceability": {
+        "brd_requirement_id": "BRD-OPS-001",
+        "brd_requirement_text": "The outage management capability shall remain available during regional infrastructure failures.",
+        "trace_type": "derived_from",
+        "trace_rationale": "Regional failover is a necessary technical mechanism to satisfy the BRD continuity requirement during regional failure conditions."
+      },
+      "scenario": "Availability",
+      "stimulus": "Primary region outage",
+      "environment": "Normal operations during an active outage event",
+      "response": "System routes processing and user access to the secondary region",
+      "response_measure": "Critical outage workflows are restored within 60 seconds",
+      "verification_approach": {
+        "type": "Test",
+        "activity": "Execute controlled regional failover testing to confirm continuity thresholds are met under outage conditions."
+      },
+      "validation_approach": {
+        "type": "Operational Testing",
+        "activity": "Run outage response drills with system operators to validate that operational continuity expectations are met during a regional failover event."
+      }
+    },
+    {
+      "requirement_id": "OMS-REQ-C01-002",
+      "requirement_statement": "The outage management platform shall present operator status, crew assignment, and network state changes within 2 seconds of source system updates during active dispatch operations.",
+      "requirement_type": "derived_technical_requirement",
+      "primary_attribute": "Performance",
+      "secondary_attributes": [
+        "Usability",
+        "Interoperability"
+      ],
+      "quality_category": "Operational Qualities",
+      "labels": [
+        "qattr:performance",
+        "qattr:usability",
+        "qattr:interoperability",
+        "qcat:operational-quality",
+        "source:brd",
+        "type:derived"
+      ],
+      "traceability": {
+        "brd_requirement_id": "NBR-002",
+        "brd_requirement_text": "The solution must support continued operator dispatch workflows during major outage events with preserved operational visibility.",
+        "trace_type": "derived_from",
+        "trace_rationale": "Timely status propagation is required to preserve operational visibility during dispatch workflows."
+      },
+      "scenario": "Performance",
+      "stimulus": "High-volume dispatch and telemetry updates during a major outage",
+      "environment": "Peak outage operations",
+      "response": "The platform refreshes operational views with near-real-time updates",
+      "response_measure": "Critical operational data is displayed within 2 seconds of source updates",
+      "verification_approach": {
+        "type": "Automated Verification",
+        "activity": "Run automated performance tests against dispatch update flows to verify end-to-end latency remains within the defined threshold."
+      },
+      "validation_approach": {
+        "type": "Human-in-the-Loop Testing",
+        "activity": "Validate with dispatch operators that the update latency supports real-time decision-making during simulated outage events."
+      }
+    }
+  ],
+  "traceability_gaps": [
+    {
+      "candidate_technical_requirement": "The outage management platform shall retain operational audit logs for seven years.",
+      "why_it_appears_necessary": "The platform supports regulated utility operations where audit retention is typically required for compliance and post-incident review.",
+      "missing_brd_requirement": "The BRD does not include an explicit retention requirement describing audit scope, duration, or compliance basis.",
+      "recommended_action": "Request an upstream BRD clarification or addendum that explicitly states the retention obligation before accepting this technical requirement into the baseline."
+    }
+  ],
+  "coverage_summary": {
+    "brd_requirement_count": 2,
+    "technical_requirement_count": 2,
+    "fully_traced_brd_requirements": 2,
+    "partially_traced_brd_requirements": 0,
+    "untraced_technical_requirements": 1,
+    "readiness": "ready_with_fixes"
+  }
+}

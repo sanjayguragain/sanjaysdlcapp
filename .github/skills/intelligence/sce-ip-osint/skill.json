@@ -1,0 +1,11 @@
+{
+  "name": "ip-osint",
+  "version": "1.0.0",
+  "author": "SDLC Security Team",
+  "description": "IP address intelligence including geolocation, ASN, hosting provider, and open ports",
+  "category": "Security & Intelligence",
+  "tags": ["osint", "ip-intelligence", "geolocation", "asn", "port-scanning"],
+  "license": "MIT",
+  "compatibility": ["claude-code", "codex", "amp", "opencode"],
+  "allowed-tools": ["Bash", "Read", "Grep"]
+}

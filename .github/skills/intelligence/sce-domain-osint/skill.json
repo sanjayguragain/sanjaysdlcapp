@@ -1,0 +1,11 @@
+{
+  "name": "domain-osint",
+  "version": "1.0.0",
+  "author": "SDLC Security Team",
+  "description": "Domain-centric OSINT including WHOIS, DNS, SSL/TLS, subdomain discovery, and historical records",
+  "category": "Security & Intelligence",
+  "tags": ["osint", "domain-intelligence", "whois", "dns", "reconnaissance"],
+  "license": "MIT",
+  "compatibility": ["claude-code", "codex", "amp", "opencode"],
+  "allowed-tools": ["Bash", "Read", "Grep"]
+}

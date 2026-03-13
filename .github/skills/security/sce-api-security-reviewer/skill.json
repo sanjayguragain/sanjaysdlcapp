@@ -1,0 +1,11 @@
+{
+  "name": "sce-api-security-reviewer",
+  "version": "1.0.0",
+  "author": "SDLC Security Team",
+  "description": "Review API security including authentication, rate limiting, CORS, and error handling for REST, GraphQL, and gRPC",
+  "category": "Security & Compliance",
+  "tags": ["security", "api-security", "rest", "graphql", "cors"],
+  "license": "MIT",
+  "compatibility": ["claude-code", "codex", "amp", "opencode"],
+  "allowed-tools": ["Bash", "Read", "Grep"]
+}

@@ -28,6 +28,25 @@ export function ArtifactCard({
   const statusColor = STATUS_COLORS[status] || "bg-gray-100 text-gray-700";
   const statusLabel = STATUS_LABELS[status] || status;
 
+  // Normalise stored 0–1 float to 0–100 integer for display
+  const qualityPct =
+    confidenceScore !== null && confidenceScore !== undefined
+      ? confidenceScore > 1
+        ? Math.round(confidenceScore)
+        : Math.round(confidenceScore * 100)
+      : null;
+
+  const qualityBarColor =
+    qualityPct === null
+      ? ""
+      : qualityPct >= 80
+      ? "from-green-500 to-emerald-500"
+      : qualityPct >= 65
+      ? "from-yellow-400 to-amber-500"
+      : qualityPct >= 40
+      ? "from-orange-400 to-amber-400"
+      : "from-red-400 to-red-600";
+
   return (
     <div
       onClick={onClick}
@@ -60,15 +79,18 @@ export function ArtifactCard({
             </span>
           )}
         </div>
-        {confidenceScore !== null && (
-          <div className="flex items-center gap-1.5">
+        {qualityPct !== null && (
+          <div
+            className="flex items-center gap-1.5"
+            title={`Quality score: ${qualityPct}% — measures section completeness, specificity, and unresolved gaps vs. IEEE 830 benchmarks`}
+          >
             <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500"
-                style={{ width: `${confidenceScore}%` }}
+                className={`h-full rounded-full bg-gradient-to-r ${qualityBarColor}`}
+                style={{ width: `${qualityPct}%` }}
               />
             </div>
-            <span className="text-xs text-gray-500">{confidenceScore}%</span>
+            <span className="text-xs text-gray-500">{qualityPct}%</span>
           </div>
         )}
       </div>

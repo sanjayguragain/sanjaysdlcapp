@@ -1,0 +1,11 @@
+{
+  "name": "sce-secure-coding-reviewer",
+  "version": "1.0.0",
+  "author": "SDLC Security Team",
+  "description": "Check language-specific secure coding practices and detect unsafe patterns across multiple programming languages",
+  "category": "Security & Compliance",
+  "tags": ["security", "secure-coding", "best-practices", "code-quality", "language-specific"],
+  "license": "MIT",
+  "compatibility": ["claude-code", "codex", "amp", "opencode"],
+  "allowed-tools": ["Bash", "Read", "Grep"]
+}
