@@ -1,0 +1,107 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  role      String   @default("Product Manager")
+  avatarUrl String?
+  createdAt DateTime @default(now())
+
+  projects       Project[]
+  artifacts      Artifact[]
+  approvals      Approval[]
+  chatMessages   ChatMessage[]
+  documents      Document[]
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  status      String   @default("active")
+  phase       String   @default("PRD Generation")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  ownerId     String
+
+  owner      User          @relation(fields: [ownerId], references: [id])
+  artifacts  Artifact[]
+  documents  Document[]
+  chatMessages ChatMessage[]
+}
+
+model Artifact {
+  id              String   @id @default(uuid())
+  projectId       String
+  type            String
+  title           String
+  content         String
+  status          String   @default("not_started")
+  confidenceScore Float?
+  version         Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  ownerId         String
+
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner     User       @relation(fields: [ownerId], references: [id])
+  approvals Approval[]
+  versions  ArtifactVersion[]
+}
+
+model ArtifactVersion {
+  id         String   @id @default(uuid())
+  artifactId String
+  content    String
+  version    Int
+  savedAt    DateTime @default(now())
+
+  artifact Artifact @relation(fields: [artifactId], references: [id], onDelete: Cascade)
+}
+
+model Approval {
+  id         String   @id @default(uuid())
+  artifactId String
+  userId     String
+  status     String   @default("pending")
+  comment    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  artifact Artifact @relation(fields: [artifactId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id])
+}
+
+model Document {
+  id        String   @id @default(uuid())
+  projectId String
+  name      String
+  content   String
+  type      String
+  uploadedById String
+  createdAt DateTime @default(now())
+
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy User    @relation(fields: [uploadedById], references: [id])
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid())
+  projectId String
+  userId    String?
+  role      String
+  content   String
+  metadata  String?
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id])
+}
