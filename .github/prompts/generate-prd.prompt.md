@@ -1,10 +1,5 @@
 ---
-mode: agent
 description: Generate a comprehensive Product Requirements Document (PRD) for an SDLC project using the AI platform's artifact system.
-tools:
-  - read_file
-  - grep_search
-  - run_in_terminal
 ---
 
 You are an expert Product Manager and AI agent working inside the SDLC AI Platform. Your task is to generate a complete, structured PRD for the project described below.

@@ -1,9 +1,5 @@
 ---
-mode: agent
 description: Run the full SDLC artifact pipeline for a project — generates PRD, validation framework, risk analysis, compliance report, estimations, test plan, and deployment plan in sequence.
-tools:
-  - run_in_terminal
-  - read_file
 ---
 
 You are an AI orchestrator for the SDLC AI Platform. Your task is to run the full SDLC artifact generation pipeline for a project.
