@@ -109,41 +109,64 @@ MANDATORY requirement numbering:
 - Security / compliance: SEC-001, SEC-002…
 - Data governance rules: DG-001, DG-002…
 
+COMPREHENSIVENESS REQUIREMENTS (CRITICAL):
+- The PRD must be a thorough, enterprise-quality document. Sparse or skeletal output is unacceptable.
+- Executive Summary: 2-3 paragraphs covering problem, solution, impact, and timeline.
+- Problem Statement: Detailed business problem with quantified impact and stakeholder pain points.
+- Goals and Objectives: At least 3-5 SMART objectives with measurable success criteria.
+- Target Users / Personas: 2-4 detailed personas with role, goals, pain points, and usage frequency.
+- Functional Requirements: **Minimum 15 numbered requirements** (FR-001 through FR-015+), each with a description and acceptance criteria. Group by feature area.
+- Non-Functional Requirements: **Minimum 8 numbered requirements** (NFR-001 through NFR-008+) covering performance (with ms/% targets), security, scalability, availability, accessibility, and maintainability.
+- User Stories / Scenarios: At least 5 user stories in "As a [role], I want to [action] so that [benefit]" format, with Gherkin acceptance criteria for the 3 most critical scenarios.
+- Acceptance Criteria: Testable pass/fail criteria for key requirements.
+- Dependencies and Assumptions: List all external dependencies, integration points, and key assumptions.
+- Out of Scope: Explicitly list excluded items to prevent scope creep.
+- Risks and Mitigations: At least 5 project risks with severity, likelihood, and mitigation actions.
+- Traceability Matrix: HTML table mapping Objectives → User Scenarios → Requirements → Acceptance Criteria.
+- Timeline / Milestones: Phased delivery plan with dates or relative timeline.
+
 Include ALL sections from the Template 4 skeleton in order. Append this watermark at the very end of the document:
 <!-- generated_by: PRD-Builder Agent v1.0.0 / sce-prd-generator Skill v1.0.0 -->`,
 
   prd_validation: `Generate a PRD Validation Report applying the 6Cs quality framework (Clear, Concise, Complete, Consistent, Correct, Confirmable) and INVEST principles as defined in the skill above.
 
 Include:
-- Per-requirement quality scores (1–5 scale)
-- Gap analysis: missing sections or requirements
-- Testability assessment for each requirement
-- Ambiguity detection (vague or unclear language)
-- Specific, actionable improvement recommendations
-- Aggregate quality metrics and overall readiness score`,
+- Per-requirement quality scores (1–5 scale) for EVERY requirement in the PRD (present as an HTML table with columns: Req ID, Requirement Summary, Clear, Complete, Consistent, Correct, Confirmable, Avg Score)
+- Gap analysis: missing sections or requirements vs. Template 4 — list each gap with severity and recommendation
+- Testability assessment for each requirement (Testable / Partially Testable / Not Testable with rationale)
+- Ambiguity detection: flag every vague phrase (“should”, “as needed”, “usually”, etc.) with suggested rewording
+- INVEST assessment for user stories (Independent, Negotiable, Valuable, Estimable, Small, Testable)
+- Specific, actionable improvement recommendations grouped by priority (Critical / Important / Nice-to-have)
+- Aggregate quality metrics: overall readiness score (0–100), per-section scores, requirements quality histogram
+- Conclusion with Go/No-Go recommendation and conditions for approval`,
 
   preliminary_estimation: `Generate a Preliminary Effort and Timeline Estimation document following the gap-analysis and DORA metrics skill guidance above.
 
 Include:
-- Effort breakdown by feature area (story points or person-days)
-- Required team composition and roles
-- Phased delivery timeline with milestones
-- Key assumptions and dependencies
-- Risk factors affecting the estimates
-- Confidence level (Low / Medium / High) per estimate category`,
+- Effort breakdown by feature area (story points or person-days) — present as an HTML table with columns: Feature Area, Complexity, Effort (person-days), Story Points, Notes
+- Required team composition and roles with headcount per role
+- Phased delivery timeline with milestones — at least 3-4 phases (Discovery, Build, Testing, Deployment) with dates or week ranges
+- T-shirt sizing summary (S/M/L/XL) for each feature area with justification
+- Key assumptions and dependencies — list at least 5-8 specific assumptions
+- Risk factors affecting the estimates with probabilistic impact assessment
+- Confidence level (Low / Medium / High) per estimate category with explanation
+- Total effort summary: best case, expected case, worst case
+- Velocity assumptions and basis (historical data or team calibration)`,
 
   cyber_risk_analysis: `Generate a Cyber Risk Analysis applying the vulnerability scanner, auth auditor, data-protection reviewer, and security report generator skills above.
 
 Use STRIDE threat modelling. Include:
-- Attack surface and vulnerability assessment
-- Authentication / authorization risk review
-- API security evaluation
-- Data classification and sensitivity mapping
-- Third-party integration risks
-- Risk severity matrix (Likelihood × Impact)
-- Prioritised mitigation strategies
-- Residual risk after mitigations
-- Compliance / regulatory implications`,
+- Threat model summary: at least 6-10 threats categorized by STRIDE (Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, Elevation of Privilege) — present as an HTML table
+- Attack surface and vulnerability assessment: enumerate all entry points (APIs, UI, data flows, third-party integrations)
+- Authentication / authorization risk review: evaluate auth mechanisms, session management, privilege escalation vectors
+- API security evaluation: input validation, rate limiting, OWASP API Top 10 mapping
+- Data classification and sensitivity mapping: identify PII, PHI, financial data with handling requirements
+- Third-party integration risks: each dependency scored by risk level
+- Risk severity matrix: HTML table with Likelihood (1-5) × Impact (1-5) for each identified threat
+- Prioritised mitigation strategies: for each risk, specify control type (preventive/detective/corrective), implementation effort, and owner
+- Residual risk after mitigations: re-scored matrix showing risk reduction
+- Compliance / regulatory implications: GDPR, SOC 2, PCI-DSS, HIPAA mapping where applicable
+- Security architecture recommendations: concrete technical controls to implement`,
 
   compliance_report: `Generate a Compliance Assessment Report applying the compliance-checker and tech-policy-resolver skills above.
 
@@ -166,15 +189,19 @@ Include:
   test_plan: `Generate a comprehensive Test Plan following the TDD template generator skill structure above.
 
 Cover:
-- Test strategy overview (approach, tools, owner)
-- In-scope and out-of-scope items
-- Test types: unit, integration, e2e, performance, security, UAT
-- Environment and test data requirements
-- Test case matrix by feature area (high-level)
-- Acceptance criteria traceability
-- Automation strategy (what to automate vs. manual)
-- Defect management process
-- Regression strategy`,
+- Test strategy overview (approach, tools, owner) with justification for chosen approach
+- In-scope and out-of-scope items — explicit boundary table
+- Test types: unit, integration, e2e, performance, security, UAT — for each type include: scope, tools, coverage target, estimated effort
+- Test case matrix by feature area: HTML table with columns: Feature, Test Type, # Test Cases, Priority, Automation?, Owner
+- Environment and test data requirements: list each environment (dev, QA, staging, prod-like) with specifications
+- Acceptance criteria traceability: map each FR/NFR to specific test cases
+- Automation strategy: what to automate vs. manual, tool selection rationale, ROI estimation
+- Performance testing plan: load profiles, SLA targets, tools, scenarios
+- Security testing plan: SAST/DAST/penetration testing scope and tools
+- Defect management process: severity definitions, SLA for resolution, escalation path
+- Regression strategy: scope, frequency, automation coverage
+- Entry/exit criteria for each test phase
+- Test schedule and milestones`,
 
   quality_review: `Generate a Quality Review and Release Readiness Report applying the 6Cs framework and test impact analysis skill above.
 
@@ -299,7 +326,9 @@ OUTPUT RULES (mandatory — override any conflicting instruction above)
 - For any unknown or unconfirmed information: write [To be confirmed — <reason>] inline and add a matching entry to an "Open Questions / Issues Log" section at the end.
 - Use proper semantic HTML: <h1>, <h2>, <h3>, <p>, <ul>, <ol>, <li>, <table>, <thead>, <tbody>, <tr>, <th>, <td>, <strong>, <em>.
 - Output the HTML document body content ONLY — no triple-backtick fences, no markdown headings, no preamble text, no delimiters.
-- Be thorough; a complete, detailed document reduces the number of [To be confirmed] gaps and raises the quality score.`;
+- DEPTH IS CRITICAL: Be thorough and comprehensive. Every section must contain substantive content — multiple paragraphs, specific requirements, measurable targets, and detailed rationale. A sparse document with mostly placeholders will fail quality review.
+- TARGET LENGTH: The document should be extensive enough to serve as a real enterprise deliverable. For PRDs this means 4000+ words with 15+ functional requirements. For other artifact types, aim for the level of detail a senior reviewer would expect.
+- Use your domain expertise to infer reasonable defaults, architecture patterns, and industry best practices where the project context allows — always marking assumptions clearly.`;
 
   const directiveHeader =
 `=============================================================

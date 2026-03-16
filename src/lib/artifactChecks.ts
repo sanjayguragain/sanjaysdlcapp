@@ -1,10 +1,138 @@
 /**
- * Shared utility for detecting blocking issues in artifact content.
+ * Shared utility for detecting blocking issues in artifact content
+ * AND deep quality evaluation using the evaluation engine.
+ *
  * Used by:
  *  - ArtifactSidePanel (client) — pre-submission gate
  *  - ArtifactViewer (client)    — pre-submission gate
  *  - PUT /artifacts/:id route   — server-side guard
+ *  - Quality API endpoint        — detailed quality breakdown
  */
+import type { ArtifactType, DocumentType, EvaluationCategory } from "@/types";
+import { interpretScore } from "@/types";
+import {
+  runDeterministicEvaluation,
+  buildEvaluationResult,
+  calculateOverallScore,
+  type CategoryScores,
+} from "./evaluationEngine";
+
+// ── ArtifactType → DocumentType mapping ─────────────────────────────────────
+
+const ARTIFACT_TO_DOC_TYPE: Record<ArtifactType, DocumentType> = {
+  prd: "prd",
+  prd_validation: "prd",
+  preliminary_estimation: "other",
+  cyber_risk_analysis: "other",
+  compliance_report: "other",
+  revised_estimation: "other",
+  test_plan: "srs",
+  quality_review: "other",
+  deployment_plan: "sad",
+};
+
+/** Strip HTML tags and decode entities to plain text for evaluation. */
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&[a-z#0-9]+;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// ── Quality evaluation result (for SDLC artifacts) ──────────────────────────
+
+export interface ArtifactQualityResult {
+  overallScore: number;            // 0-100
+  confidenceScore: number;         // 0-1 (for backward compat with Prisma field)
+  interpretation: string;
+  categoryScores: Record<EvaluationCategory, number>;
+  blockers: string[];
+  recommendations: string[];
+  structuralAnalysis: {
+    presentSections: string[];
+    missingSections: string[];
+    sectionOrderCorrect: boolean;
+  };
+  aiRiskIndicators: string[];
+}
+
+/**
+ * Run the full quality evaluation on an SDLC artifact.
+ * Combines the existing blocker detection with the evaluation engine's
+ * 7-category scoring (deterministic portion — no LLM call).
+ *
+ * For LLM-enhanced scores (architecture_completeness, security,
+ * operational_readiness), default estimates are used based on the
+ * deterministic signals. Use `evaluateArtifactQualityWithLLM()` for
+ * the full LLM-augmented evaluation.
+ */
+export function evaluateArtifactQuality(
+  type: ArtifactType,
+  htmlContent: string
+): ArtifactQualityResult {
+  const text = htmlToPlainText(htmlContent);
+  const docType = ARTIFACT_TO_DOC_TYPE[type] ?? "other";
+
+  // Run blocker detection on the raw HTML (needs tags for heading parsing)
+  const blockers = extractBlockers(htmlContent);
+
+  // Run deterministic evaluation engine
+  const deterministicEval = runDeterministicEvaluation(text, docType);
+
+  // Estimate LLM categories from deterministic signals
+  const structureScore = deterministicEval.partialScores.structure;
+  const reqScore = deterministicEval.partialScores.requirements_quality;
+
+  // Architecture completeness: derive from structure + content length
+  const archScore = Math.round(
+    structureScore * 0.6 + Math.min(100, text.length / 50) * 0.4
+  );
+  // Security: check for security-related keywords
+  const securityKeywords = /security|threat|vulnerability|authentication|authorization|encryption|access\s*control|compliance/i;
+  const secScore = securityKeywords.test(text)
+    ? Math.min(100, structureScore * 0.5 + 40)
+    : Math.max(20, structureScore * 0.3);
+  // Operational readiness: check for ops keywords
+  const opsKeywords = /monitoring|alerting|deployment|rollback|health\s*check|incident|sla|slo|logging|observability/i;
+  const opsScore = opsKeywords.test(text)
+    ? Math.min(100, structureScore * 0.5 + 35)
+    : Math.max(20, structureScore * 0.3);
+
+  const fullResult = buildEvaluationResult(docType, deterministicEval, {
+    architecture_completeness: archScore,
+    security: Math.round(secScore),
+    operational_readiness: Math.round(opsScore),
+    llmRecommendations: [],
+  });
+
+  // Apply blocker penalty: each unresolved blocker reduces score
+  const blockerPenalty = Math.min(20, blockers.length * 3);
+  const adjustedScore = Math.max(0, fullResult.overall_score - blockerPenalty);
+
+  // Add blocker-related recommendations
+  const allRecs = fullResult.recommendations.map((r) => r.text);
+  if (blockers.length > 0) {
+    allRecs.unshift(
+      `Resolve ${blockers.length} open question(s) / placeholder(s) before submission`
+    );
+  }
+
+  return {
+    overallScore: adjustedScore,
+    confidenceScore: Math.min(0.98, Math.max(0.05, adjustedScore / 100)),
+    interpretation: interpretScore(adjustedScore),
+    categoryScores: fullResult.category_scores,
+    blockers,
+    recommendations: allRecs,
+    structuralAnalysis: {
+      presentSections: fullResult.structural_analysis.present_sections,
+      missingSections: fullResult.structural_analysis.missing_sections,
+      sectionOrderCorrect: fullResult.structural_analysis.section_order_correct,
+    },
+    aiRiskIndicators: fullResult.ai_risk_indicators.map((risk) => risk.text),
+  };
+}
 
 /**
  * Decode dash HTML entities so regex matching works regardless of whether the

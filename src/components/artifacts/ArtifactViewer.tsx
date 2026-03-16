@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
-import { ArtifactType, ArtifactStatus, ARTIFACT_DEFINITIONS, STATUS_COLORS, STATUS_LABELS } from "@/types";
+import { ArtifactType, ArtifactStatus, ARTIFACT_DEFINITIONS, STATUS_COLORS, STATUS_LABELS, EvaluationCategory, CATEGORY_LABELS, SCORING_WEIGHTS } from "@/types";
 
 interface Approval {
   id: string;
@@ -22,6 +22,7 @@ interface ArtifactViewerProps {
   status: ArtifactStatus;
   confidenceScore: number | null;
   version: number;
+  projectId?: string;
   approvals?: Approval[];
   onApprove?: (comment: string) => Promise<void>;
   onReject?: (comment: string) => Promise<void>;
@@ -136,12 +137,14 @@ function formatRelativeTime(iso: string) {
 }
 
 export function ArtifactViewer({
+  id,
   type,
   title,
   content,
   status,
   confidenceScore,
   version,
+  projectId,
   approvals = [],
   onApprove,
   onReject,
@@ -154,6 +157,41 @@ export function ArtifactViewer({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmittingForApproval, setIsSubmittingForApproval] = useState(false);
   const [openQuestionsWarning, setOpenQuestionsWarning] = useState<string[]>([]);
+  const [showQualityPanel, setShowQualityPanel] = useState(false);
+  const [qualityData, setQualityData] = useState<{
+    overallScore: number;
+    interpretation: string;
+    categoryScores: Record<EvaluationCategory, number>;
+    recommendations: string[];
+    structuralAnalysis: {
+      presentSections: string[];
+      missingSections: string[];
+      sectionOrderCorrect: boolean;
+    };
+    aiRiskIndicators: string[];
+  } | null>(null);
+  const [qualityLoading, setQualityLoading] = useState(false);
+
+  const fetchQuality = useCallback(async () => {
+    if (!projectId) return;
+    setQualityLoading(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/artifacts/${id}/quality`);
+      if (res.ok) {
+        setQualityData(await res.json());
+      }
+    } catch {
+      // ignore
+    } finally {
+      setQualityLoading(false);
+    }
+  }, [projectId, id]);
+
+  useEffect(() => {
+    if (showQualityPanel && !qualityData && !qualityLoading) {
+      fetchQuality();
+    }
+  }, [showQualityPanel, qualityData, qualityLoading, fetchQuality]);
 
   const def = ARTIFACT_DEFINITIONS.find((d) => d.type === type);
   const statusColor = STATUS_COLORS[status] || "bg-gray-100 text-gray-700";
@@ -221,11 +259,15 @@ export function ArtifactViewer({
 
             <div className="flex items-center gap-2">
               {confidencePct !== null && (
-                <div className="flex items-center gap-2 mr-4">
-                  <span className="text-sm text-gray-500">Confidence</span>
+                <div className="flex items-center gap-2 mr-2">
+                  <span className="text-sm text-gray-500">Quality</span>
                   <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500"
+                      className={`h-full rounded-full bg-gradient-to-r ${
+                        confidencePct >= 80 ? "from-emerald-500 to-green-500" :
+                        confidencePct >= 60 ? "from-amber-400 to-yellow-500" :
+                        "from-red-400 to-red-600"
+                      }`}
                       style={{ width: `${confidencePct}%` }}
                     />
                   </div>
@@ -233,6 +275,20 @@ export function ArtifactViewer({
                     {confidencePct}%
                   </span>
                 </div>
+              )}
+
+              {projectId && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowQualityPanel((v) => !v)}
+                  className="!text-indigo-600 hover:!bg-indigo-50"
+                >
+                  <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  {showQualityPanel ? "Hide Analysis" : "Quality Analysis"}
+                </Button>
               )}
 
               {onEdit && (
@@ -289,6 +345,123 @@ export function ArtifactViewer({
           />
         </div>
       </div>
+
+      {/* Quality Analysis Panel */}
+      {showQualityPanel && (
+        <div className="bg-white rounded-xl border border-indigo-200 overflow-hidden">
+          <div className="px-6 py-3 border-b border-indigo-100 bg-indigo-50/50">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-indigo-900 flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                Quality Analysis
+              </h3>
+              {qualityData && (
+                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                  qualityData.overallScore >= 90 ? "bg-emerald-100 text-emerald-700" :
+                  qualityData.overallScore >= 75 ? "bg-blue-100 text-blue-700" :
+                  qualityData.overallScore >= 60 ? "bg-amber-100 text-amber-700" :
+                  "bg-red-100 text-red-700"
+                }`}>
+                  {qualityData.interpretation}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="px-6 py-4">
+            {qualityLoading ? (
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Analyzing artifact quality...
+              </div>
+            ) : qualityData ? (
+              <div className="space-y-4">
+                {/* Category scores */}
+                <div className="space-y-3">
+                  {(Object.keys(CATEGORY_LABELS) as EvaluationCategory[]).map((cat) => {
+                    const score = qualityData.categoryScores[cat] ?? 0;
+                    const weight = SCORING_WEIGHTS[cat];
+                    return (
+                      <div key={cat}>
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-medium text-gray-700">{CATEGORY_LABELS[cat]}</span>
+                            <span className="text-[10px] text-gray-400">{Math.round(weight * 100)}%</span>
+                          </div>
+                          <span className={`text-xs font-bold ${
+                            score >= 90 ? "text-emerald-700" : score >= 75 ? "text-blue-700" : score >= 60 ? "text-amber-700" : "text-red-700"
+                          }`}>{Math.round(score)}</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              score >= 90 ? "bg-emerald-500" : score >= 75 ? "bg-blue-500" : score >= 60 ? "bg-amber-500" : "bg-red-500"
+                            }`}
+                            style={{ width: `${Math.max(2, score)}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Missing sections */}
+                {qualityData.structuralAnalysis.missingSections.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-600 mb-1">Missing Sections</p>
+                    <div className="flex flex-wrap gap-1">
+                      {qualityData.structuralAnalysis.missingSections.map((s, i) => (
+                        <span key={i} className="text-[11px] px-2 py-0.5 bg-red-50 text-red-600 rounded-md border border-red-100">{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* AI risk indicators */}
+                {qualityData.aiRiskIndicators.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-600 mb-1">AI Risk Indicators</p>
+                    <ul className="space-y-1">
+                      {qualityData.aiRiskIndicators.map((r, i) => (
+                        <li key={i} className="text-[11px] text-amber-700 flex items-start gap-1.5">
+                          <span className="text-amber-400 shrink-0 mt-0.5">!</span>
+                          <span>{r}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Top recommendations */}
+                {qualityData.recommendations.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-600 mb-1">Recommendations</p>
+                    <ul className="space-y-1">
+                      {qualityData.recommendations.slice(0, 5).map((r, i) => (
+                        <li key={i} className="text-[11px] text-gray-600 flex items-start gap-1.5">
+                          <span className="text-indigo-400 shrink-0 mt-0.5">&#10095;</span>
+                          <span>{r}</span>
+                        </li>
+                      ))}
+                      {qualityData.recommendations.length > 5 && (
+                        <li className="text-[11px] text-gray-400 ml-4">
+                          +{qualityData.recommendations.length - 5} more
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400">Unable to load quality data.</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Open questions blocking banner */}
       {openQuestionsWarning.length > 0 && (

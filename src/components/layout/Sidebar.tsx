@@ -183,7 +183,7 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
           const isActive =
             pathname === item.href ||
@@ -203,6 +203,60 @@ export function Sidebar() {
             </Link>
           );
         })}
+
+        {/* Quality Evaluator Section */}
+        <div className="pt-4 mt-4 border-t border-gray-800">
+          <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-600">
+            Quality Evaluator
+          </p>
+          {[
+            {
+              label: "Evaluate",
+              href: "/evaluate",
+              icon: (
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              ),
+            },
+            {
+              label: "Evaluations",
+              href: "/evaluations",
+              icon: (
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+              ),
+            },
+            {
+              label: "Eval Analytics",
+              href: "/eval-analytics",
+              icon: (
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              ),
+            },
+          ].map((item) => {
+            const isActive =
+              pathname === item.href ||
+              pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  isActive
+                    ? "bg-emerald-600/20 text-emerald-400"
+                    : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+                }`}
+              >
+                {item.icon}
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
       </nav>
 
       {/* GitHub user identity + sign-out */}

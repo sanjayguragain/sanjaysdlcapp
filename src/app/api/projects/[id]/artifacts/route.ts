@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { generateArtifact, scoreArtifactQuality } from "@/lib/ai";
+import { generateArtifact } from "@/lib/ai";
 import { ARTIFACT_DEFINITIONS, ArtifactType, ArtifactStatus } from "@/types";
 import { getProjectPhase } from "@/lib/workflow";
+import { evaluateArtifactQuality } from "@/lib/artifactChecks";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
@@ -194,7 +195,7 @@ export async function PUT(
     data: {
       content,
       ...(title ? { title } : {}),
-      confidenceScore: scoreArtifactQuality(artifact.type as ArtifactType, content),
+      confidenceScore: evaluateArtifactQuality(artifact.type as ArtifactType, content).confidenceScore,
       version: artifact.version + 1,
       status: "in_progress",
     },

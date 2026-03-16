@@ -215,6 +215,7 @@ export default function ArtifactDetailPage() {
           status={artifact.status}
           confidenceScore={artifact.confidenceScore}
           version={artifact.version}
+          projectId={projectId}
           approvals={artifact.approvals ?? []}
           onApprove={handleApprove}
           onReject={handleReject}

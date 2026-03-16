@@ -248,7 +248,18 @@ export default function ProjectChatPage() {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: newContent }),
       }).then((r) => r.ok ? r.json() : null).then((data) => {
-        if (data) setActiveArtifact((prev) => prev ? { ...prev, content: data.content, version: data.version } : null);
+        if (data) {
+          setActiveArtifact((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  content: data.content,
+                  version: data.version,
+                  confidenceScore: data.confidenceScore ?? prev.confidenceScore,
+                }
+              : null
+          );
+        }
       }).catch(() => {});
     };
 
@@ -394,7 +405,18 @@ export default function ProjectChatPage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ content: artifactContent }),
           }).then((r) => r.ok ? r.json() : null).then((data) => {
-            if (data) setActiveArtifact((prev) => prev ? { ...prev, content: data.content, version: data.version } : null);
+            if (data) {
+              setActiveArtifact((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      content: data.content,
+                      version: data.version,
+                      confidenceScore: data.confidenceScore ?? prev.confidenceScore,
+                    }
+                  : null
+              );
+            }
           }).catch(() => {});
         };
 
@@ -583,7 +605,14 @@ export default function ProjectChatPage() {
         if (res.ok) {
           const data = await res.json();
           setActiveArtifact((prev) =>
-            prev ? { ...prev, content: data.content, version: data.version } : null
+            prev
+              ? {
+                  ...prev,
+                  content: data.content,
+                  version: data.version,
+                  confidenceScore: data.confidenceScore ?? prev.confidenceScore,
+                }
+              : null
           );
         }
       } catch {
@@ -631,7 +660,18 @@ export default function ProjectChatPage() {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: newContent }),
       }).then((r) => r.ok ? r.json() : null).then((data) => {
-        if (data) setActiveArtifact((prev) => prev ? { ...prev, content: data.content, version: data.version, confidenceScore: data.confidenceScore } : null);
+        if (data) {
+          setActiveArtifact((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  content: data.content,
+                  version: data.version,
+                  confidenceScore: data.confidenceScore ?? prev.confidenceScore,
+                }
+              : null
+          );
+        }
       }).catch(() => {});
     };
 

@@ -4,6 +4,100 @@ import { buildArtifactPrompt, getPrdAgentRulesForChat } from "./skillLoader";
 // Loaded once at module initialisation — cached by skillLoader, so disk I/O is a one-time cost.
 const _PRD_AGENT_RULES = getPrdAgentRulesForChat();
 
+/** Detect Azure reasoning models (o-series) that don't support temperature. */
+function isReasoningModel(deploymentName: string | undefined): boolean {
+  if (!deploymentName) return false;
+  const d = deploymentName.toLowerCase();
+  // gpt-5 deployments on Azure currently require max_completion_tokens
+  return /^o[1-9]|^o3|reasoning|^gpt-5/.test(d);
+}
+
+/** Build Azure or standard model parameters. */
+function buildModelParams(opts: {
+  useAzure: boolean;
+  azureDeployment?: string;
+  temperature: number;
+  maxTokens: number;
+}) {
+  if (opts.useAzure) {
+    if (isReasoningModel(opts.azureDeployment)) {
+      // Reasoning models: no temperature, use max_completion_tokens
+      return { max_completion_tokens: opts.maxTokens };
+    }
+    // Chat models on Azure: temperature + max_tokens
+    return { temperature: opts.temperature, max_tokens: opts.maxTokens };
+  }
+  return { temperature: opts.temperature, max_tokens: opts.maxTokens };
+}
+
+type ProviderKind = "azure" | "github" | "openai";
+
+interface ProviderConfig {
+  kind: ProviderKind;
+  url: string;
+  headers: Record<string, string>;
+  model?: string;
+  useAzure: boolean;
+  azureDeployment?: string;
+}
+
+function getProviderConfigs(defaultGithubModel: string): ProviderConfig[] {
+  const azureEndpoint = process.env.AZURE_OPENAI_ENDPOINT;
+  const azureKey = process.env.AZURE_OPENAI_API_KEY;
+  const azureDeployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
+  const azureApiVersion = process.env.AZURE_OPENAI_API_VERSION || "2024-08-01-preview";
+  const githubToken = process.env.GITHUB_TOKEN;
+  const githubModel = process.env.GITHUB_MODEL || defaultGithubModel;
+  const openaiKey = process.env.OPENAI_API_KEY;
+
+  const providers: ProviderConfig[] = [];
+
+  if (azureEndpoint && azureKey && azureDeployment) {
+    const base = azureEndpoint.replace(/\/$/, "");
+    providers.push({
+      kind: "azure",
+      url: `${base}/openai/deployments/${azureDeployment}/chat/completions?api-version=${azureApiVersion}`,
+      headers: { "api-key": azureKey },
+      model: undefined,
+      useAzure: true,
+      azureDeployment,
+    });
+  }
+
+  if (githubToken) {
+    providers.push({
+      kind: "github",
+      url: "https://models.inference.ai.azure.com/chat/completions",
+      headers: { Authorization: `Bearer ${githubToken}` },
+      model: githubModel,
+      useAzure: false,
+    });
+
+    // Safe fallback for invalid/unsupported configured GitHub model names.
+    if (githubModel !== "gpt-4o") {
+      providers.push({
+        kind: "github",
+        url: "https://models.inference.ai.azure.com/chat/completions",
+        headers: { Authorization: `Bearer ${githubToken}` },
+        model: "gpt-4o",
+        useAzure: false,
+      });
+    }
+  }
+
+  if (openaiKey) {
+    providers.push({
+      kind: "openai",
+      url: "https://api.openai.com/v1/chat/completions",
+      headers: { Authorization: `Bearer ${openaiKey}` },
+      model: "gpt-4o",
+      useAzure: false,
+    });
+  }
+
+  return providers;
+}
+
 const SYSTEM_PROMPT = `You are an expert AI product documentation assistant for enterprise software teams. You help generate structured SDLC artifacts including Product Requirements Documents, risk analyses, compliance reports, test plans, and deployment plans.
 
 Your role:
@@ -54,19 +148,23 @@ GUIDED Q&A MODE — Filling artifact gaps through conversation (CRITICAL):
 This mode activates whenever the user is answering clarifying questions about an open artifact (artifactId is set in context).
 
 When the user provides answers to clarifying questions about an artifact:
-1. Do NOT rebuild the artifact yet. Do NOT emit <<<ARTIFACT_UPDATE>>> delimiters. The document will be rebuilt once in a single pass at the end.
-2. Acknowledge their answers in ONE brief sentence (e.g. "Got it — thanks for those answers.").
-3. Read the REMAINING UNRESOLVED ITEMS list from the context and cross-reference the entire conversation history to identify which items have already been answered (by any previous user message). Only ask about items that are STILL unanswered.
-4. Show progress on one line: **(X of Y answered — Z remaining)**
-5. If unresolved items remain, ask the NEXT batch of up to 4 as simple direct questions:
+1. Immediately rebuild and return the FULL updated artifact content after each user answer.
+2. First reply with exactly one short sentence: "I'm updating the document — you can view the changes in the editor on the right."
+3. Then emit the complete updated artifact wrapped in delimiters:
+<<<ARTIFACT_UPDATE>>>
+[full updated artifact content]
+<<<END_ARTIFACT_UPDATE>>>
+4. After the delimiter block, show progress on one line: **(X of Y answered — Z remaining)**
+5. Read the REMAINING UNRESOLVED ITEMS list from context and cross-reference the conversation history to identify which items are already answered. Only ask about items that are STILL unanswered.
+6. If unresolved items remain, ask the NEXT batch of up to 4 as simple direct questions:
    **Q1.** What is [topic]?
    **Q2.** …
    - NEVER repeat a question already asked or answered earlier in this conversation.
    - NEVER ask more than 4 questions at once.
    - Ask blocking/important items before optional ones.
-6. If ALL items are now answered (0 remaining), output ONLY this exact token on its own line with nothing before or after it:
+7. If ALL items are now answered (0 remaining), after the artifact update block output this exact token on its own line:
 <<<ALL_QUESTIONS_ANSWERED>>>
-   Do not explain, do not say anything else. The system will immediately trigger the document rebuild.`;
+  Do not include extra explanation around this token.`;
 
 
 // ARTIFACT_PROMPTS removed — prompts are now loaded dynamically from
@@ -101,19 +199,8 @@ export async function streamChatResponse(
   messages: { role: string; content: string }[],
   projectContext?: string
 ): Promise<ReadableStream<Uint8Array> | null> {
-  const azureEndpoint = process.env.AZURE_OPENAI_ENDPOINT;
-  const azureKey = process.env.AZURE_OPENAI_API_KEY;
-  const azureDeployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
-  const azureApiVersion = process.env.AZURE_OPENAI_API_VERSION || "2024-08-01-preview";
-  const openaiKey = process.env.OPENAI_API_KEY;
-  const githubToken = process.env.GITHUB_TOKEN;
-  const githubModel = process.env.GITHUB_MODEL || "gpt-5.2";
-
-  const useAzure = !!(azureEndpoint && azureKey && azureDeployment);
-  const useGitHub = !useAzure && !!githubToken;
-  const useOpenAI = !useAzure && !useGitHub && !!openaiKey;
-
-  if (!useAzure && !useGitHub && !useOpenAI) return null;
+  const providers = getProviderConfigs("gpt-5.2");
+  if (providers.length === 0) return null;
 
   const systemMessages = [
     { role: "system", content: SYSTEM_PROMPT },
@@ -122,62 +209,43 @@ export async function streamChatResponse(
       : []),
   ];
 
-  let url: string;
-  let authHeaders: Record<string, string>;
-  let model: string | undefined;
+  for (const provider of providers) {
+    const response = await fetch(provider.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...provider.headers },
+      body: JSON.stringify({
+        ...(provider.model ? { model: provider.model } : {}),
+        messages: [...systemMessages, ...messages],
+        ...buildModelParams({
+          useAzure: provider.useAzure,
+          azureDeployment: provider.azureDeployment,
+          temperature: 0.7,
+          maxTokens: 16000,
+        }),
+        stream: true,
+      }),
+    });
 
-  if (useAzure) {
-    const base = azureEndpoint!.replace(/\/$/, "");
-    url = `${base}/openai/deployments/${azureDeployment}/chat/completions?api-version=${azureApiVersion}`;
-    authHeaders = { "api-key": azureKey! };
-    model = undefined;
-  } else if (useGitHub) {
-    url = "https://models.inference.ai.azure.com/chat/completions";
-    authHeaders = { Authorization: `Bearer ${githubToken}` };
-    model = githubModel;
-  } else {
-    url = "https://api.openai.com/v1/chat/completions";
-    authHeaders = { Authorization: `Bearer ${openaiKey}` };
-    model = "gpt-4o";
+    if (response.ok && response.body) return response.body;
+
+    const errText = await response.text().catch(() => response.statusText);
+    console.error(`[ai][stream] ${provider.kind} failed ${response.status}: ${errText}`);
   }
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders },
-    body: JSON.stringify({
-      ...(model ? { model } : {}),
-      messages: [...systemMessages, ...messages],
-      // Azure reasoning models use max_completion_tokens and don't support temperature
-      ...(useAzure
-        ? { max_completion_tokens: 16000 }
-        : { temperature: 0.7, max_tokens: 4000 }
-      ),
-      stream: true,
-    }),
-  });
-
-  if (!response.ok || !response.body) return null;
-  return response.body;
+  return null;
 }
 
 export async function generateChatResponse(
   messages: { role: string; content: string }[],
   projectContext?: string
 ): Promise<ChatResponse> {
-  const azureEndpoint = process.env.AZURE_OPENAI_ENDPOINT;
-  const azureKey = process.env.AZURE_OPENAI_API_KEY;
-  const azureDeployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
-  const azureApiVersion = process.env.AZURE_OPENAI_API_VERSION || "2024-08-01-preview";
-  const openaiKey = process.env.OPENAI_API_KEY;
-  const githubToken = process.env.GITHUB_TOKEN;
-  const githubModel = process.env.GITHUB_MODEL || "gpt-4o";
+  const providers = getProviderConfigs("gpt-5.2");
 
-  const useAzure = !!(azureEndpoint && azureKey && azureDeployment);
-  const useGitHub = !useAzure && !!githubToken;
-  const useOpenAI = !useAzure && !useGitHub && !!openaiKey;
-
-  if (!useAzure && !useGitHub && !useOpenAI) {
-    return generateMockResponse(messages);
+  if (providers.length === 0) {
+    return {
+      content:
+        "I can't reach an AI provider right now. Please configure at least one of AZURE_OPENAI_*, GITHUB_TOKEN, or OPENAI_API_KEY and restart the dev server.",
+    };
   }
 
   const systemMessages = [
@@ -187,55 +255,37 @@ export async function generateChatResponse(
       : []),
   ];
 
-  let url: string;
-  let authHeaders: Record<string, string>;
-  let model: string | undefined;
+  for (const provider of providers) {
+    const response = await fetch(provider.url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...provider.headers,
+      },
+      body: JSON.stringify({
+        ...(provider.model ? { model: provider.model } : {}),
+        messages: [...systemMessages, ...messages],
+        ...buildModelParams({
+          useAzure: provider.useAzure,
+          azureDeployment: provider.azureDeployment,
+          temperature: 0.7,
+          maxTokens: 16000,
+        }),
+      }),
+    });
 
-  if (useAzure) {
-    // Azure OpenAI — deployment name is in the URL, not the body
-    const base = azureEndpoint!.replace(/\/$/, "");
-    url = `${base}/openai/deployments/${azureDeployment}/chat/completions?api-version=${azureApiVersion}`;
-    authHeaders = { "api-key": azureKey! };
-    model = undefined;
-  } else if (useGitHub) {
-    // GitHub Models — OpenAI-compatible, auth via GitHub PAT
-    // https://docs.github.com/en/github-models
-    url = "https://models.inference.ai.azure.com/chat/completions";
-    authHeaders = { Authorization: `Bearer ${githubToken}` };
-    model = githubModel;
-  } else {
-    // Standard OpenAI
-    url = "https://api.openai.com/v1/chat/completions";
-    authHeaders = { Authorization: `Bearer ${openaiKey}` };
-    model = "gpt-4o";
-  }
+    if (response.ok) {
+      const data = await response.json();
+      return { content: data.choices[0].message.content };
+    }
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...authHeaders,
-    },
-    body: JSON.stringify({
-      ...(model ? { model } : {}),
-      messages: [...systemMessages, ...messages],
-      // Azure reasoning models use max_completion_tokens and don't support temperature
-      ...(useAzure
-        ? { max_completion_tokens: 16000 }
-        : { temperature: 0.7, max_tokens: 4000 }
-      ),
-    }),
-  });
-
-  if (!response.ok) {
     const errText = await response.text().catch(() => response.statusText);
-    console.error(`[ai] API error ${response.status}: ${errText} — falling back to mock`);
-    return generateMockResponse(messages);
+    console.error(`[ai] ${provider.kind} API error ${response.status}: ${errText}`);
   }
 
-  const data = await response.json();
   return {
-    content: data.choices[0].message.content,
+    content:
+      "I couldn't reach any configured AI provider (Azure/GitHub/OpenAI). Please verify the configured API keys/deployment and restart the dev server.",
   };
 }
 
@@ -245,16 +295,10 @@ export async function generateChatResponse(
  * must never happen here. This function always produces a complete HTML document.
  */
 async function callArtifactDirectly(userPrompt: string): Promise<string> {
-  const azureEndpoint = process.env.AZURE_OPENAI_ENDPOINT;
-  const azureKey = process.env.AZURE_OPENAI_API_KEY;
-  const azureDeployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
-  const azureApiVersion = process.env.AZURE_OPENAI_API_VERSION || "2024-08-01-preview";
-  const openaiKey = process.env.OPENAI_API_KEY;
-  const githubToken = process.env.GITHUB_TOKEN;
-  const githubModel = process.env.GITHUB_MODEL || "gpt-4o";
-
-  const useAzure = !!(azureEndpoint && azureKey && azureDeployment);
-  const useGitHub = !useAzure && !!githubToken;
+  const providers = getProviderConfigs("gpt-5.2");
+  if (providers.length === 0) {
+    throw new Error("No AI provider configured");
+  }
 
   const artifactSystemPrompt = `You are an expert SDLC documentation specialist producing enterprise-grade HTML documents.
 
@@ -266,47 +310,37 @@ STRICT RULES — follow these without exception:
 5. The more unknowns you fill with [To be confirmed] placeholders, the lower the reader's confidence in the document, so be explicit about gaps.
 6. If there are 3 or more significant unknowns, append a final <h2>Open Questions</h2> section listing each outstanding item as a numbered <ol><li> — this makes gaps visible at a glance and is required for the document to be approved.`;
 
-  let url: string;
-  let authHeaders: Record<string, string>;
-  let model: string | undefined;
+  let lastError = "";
+  for (const provider of providers) {
+    const response = await fetch(provider.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...provider.headers },
+      body: JSON.stringify({
+        ...(provider.model ? { model: provider.model } : {}),
+        messages: [
+          { role: "system", content: artifactSystemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        ...buildModelParams({
+          useAzure: provider.useAzure,
+          azureDeployment: provider.azureDeployment,
+          temperature: 0.3,
+          maxTokens: 16000,
+        }),
+      }),
+    });
 
-  if (useAzure) {
-    const base = azureEndpoint!.replace(/\/$/, "");
-    url = `${base}/openai/deployments/${azureDeployment}/chat/completions?api-version=${azureApiVersion}`;
-    authHeaders = { "api-key": azureKey! };
-    model = undefined;
-  } else if (useGitHub) {
-    url = "https://models.inference.ai.azure.com/chat/completions";
-    authHeaders = { Authorization: `Bearer ${githubToken!}` };
-    model = githubModel;
-  } else {
-    url = "https://api.openai.com/v1/chat/completions";
-    authHeaders = { Authorization: `Bearer ${openaiKey}` };
-    model = "gpt-4o";
-  }
+    if (response.ok) {
+      const data = await response.json();
+      return (data.choices[0].message.content as string) ?? "";
+    }
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders },
-    body: JSON.stringify({
-      ...(model ? { model } : {}),
-      messages: [
-        { role: "system", content: artifactSystemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      ...(useAzure
-        ? { max_completion_tokens: 16000 }
-        : { temperature: 0.3, max_tokens: 4000 }),
-    }),
-  });
-
-  if (!response.ok) {
     const errText = await response.text().catch(() => response.statusText);
-    throw new Error(`AI API error ${response.status}: ${errText}`);
+    lastError = `${provider.kind} ${response.status}: ${errText}`;
+    console.error(`[artifact] ${lastError}`);
   }
 
-  const data = await response.json();
-  return (data.choices[0].message.content as string) ?? "";
+  throw new Error(`All providers failed. Last error: ${lastError}`);
 }
 
 /**
@@ -436,6 +470,116 @@ export function scoreArtifactQuality(type: ArtifactType, htmlContent: string): n
   return Math.min(0.98, Math.max(0.05, total / 100));
 }
 
+interface PrdCoverage {
+  frCount: number;
+  nfrCount: number;
+  secCount: number;
+  dgCount: number;
+  storyCount: number;
+  acCount: number;
+  traceRows: number;
+  unmet: string[];
+}
+
+/**
+ * Lightweight deterministic PRD coverage check used as a gate before returning
+ * generated PRDs to the UI.
+ */
+function analyzePrdCoverage(html: string): PrdCoverage {
+  const text = html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&[a-z#0-9]+;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const frCount = (text.match(/\bFR[-\s_]?0*\d+\b/gi) || []).length;
+  const nfrCount = (text.match(/\bNFR[-\s_]?0*\d+\b/gi) || []).length;
+  const secCount = (text.match(/\bSEC[-\s_]?0*\d+\b/gi) || []).length;
+  const dgCount = (text.match(/\bDG[-\s_]?0*\d+\b/gi) || []).length;
+  const storyCount = (text.match(/\bAs\s+a\b/gi) || []).length;
+  const acCount = (text.match(/\b(acceptance\s*criteria|given\s+.+\s+when\s+.+\s+then)\b/gi) || []).length;
+  const traceRows = Math.max(0, (html.match(/<tr\b/gi) || []).length - 1);
+
+  const unmet: string[] = [];
+  if (frCount < 15) unmet.push(`Functional requirements below minimum: ${frCount}/15`);
+  if (nfrCount < 8) unmet.push(`Non-functional requirements below minimum: ${nfrCount}/8`);
+  if (secCount < 5) unmet.push(`Security/compliance requirements below minimum: ${secCount}/5`);
+  if (dgCount < 5) unmet.push(`Data governance requirements below minimum: ${dgCount}/5`);
+  if (storyCount < 8) unmet.push(`User stories below minimum: ${storyCount}/8`);
+  if (acCount < 10) unmet.push(`Acceptance-criteria coverage below minimum: ${acCount}/10`);
+  if (traceRows < 8) unmet.push(`Traceability matrix rows below minimum: ${traceRows}/8`);
+
+  return {
+    frCount,
+    nfrCount,
+    secCount,
+    dgCount,
+    storyCount,
+    acCount,
+    traceRows,
+    unmet,
+  };
+}
+
+function buildPrdExpansionPrompt(opts: {
+  projectContext: string;
+  draftHtml: string;
+  coverage: PrdCoverage;
+}): string {
+  const gaps = opts.coverage.unmet.map((g, i) => `${i + 1}. ${g}`).join("\n");
+  return `You are improving an existing PRD draft to pass strict quality and quantity gates.
+
+PROJECT CONTEXT:
+${opts.projectContext}
+
+CURRENT PRD DRAFT (HTML):
+${opts.draftHtml}
+
+QUALITY GAPS TO FIX (MANDATORY):
+${gaps}
+
+REWRITE REQUIREMENTS:
+- Keep the same document structure and section order, but expand weak sections substantially.
+- Ensure minimum counts are met:
+  * FR requirements: >= 15 (FR-001 ...)
+  * NFR requirements: >= 8 (NFR-001 ...)
+  * Security requirements: >= 5 (SEC-001 ...)
+  * Data governance requirements: >= 5 (DG-001 ...)
+  * User stories: >= 8 ("As a ...")
+  * Acceptance criteria coverage: >= 10 explicit criteria items
+  * Traceability matrix rows: >= 8
+- Requirements must be atomic, testable, and measurable.
+- Add concrete thresholds where appropriate (latency, uptime, scale, error budgets, etc.).
+- Remove fluff and generic language; increase specificity and implementation clarity.
+
+Output ONLY the full updated HTML PRD body.`;
+}
+
+/**
+ * PRD multi-pass generation pipeline:
+ * 1) initial generation
+ * 2) deterministic coverage check
+ * 3) targeted expansion pass if gates are not met
+ */
+async function generatePrdWithQualityGates(userPrompt: string, projectContext: string): Promise<string> {
+  let current = await callArtifactDirectly(userPrompt);
+
+  // Run up to two expansion passes to satisfy quantity/quality gates.
+  for (let i = 0; i < 2; i++) {
+    const coverage = analyzePrdCoverage(current);
+    if (coverage.unmet.length === 0) break;
+
+    const expandPrompt = buildPrdExpansionPrompt({
+      projectContext,
+      draftHtml: current,
+      coverage,
+    });
+    current = await callArtifactDirectly(expandPrompt);
+  }
+
+  return current;
+}
+
 export async function generateArtifact(
   type: ArtifactType,
   projectContext: string,
@@ -461,7 +605,9 @@ export async function generateArtifact(
   }`;
 
   try {
-    const content = await callArtifactDirectly(userPrompt);
+    const content = type === "prd"
+      ? await generatePrdWithQualityGates(userPrompt, projectContext)
+      : await callArtifactDirectly(userPrompt);
     return {
       content,
       metadata: {

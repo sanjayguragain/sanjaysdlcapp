@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from "docx";
 import { ArtifactEditor } from "./ArtifactEditor";
-import { ArtifactType, ARTIFACT_DEFINITIONS } from "@/types";
+import { ArtifactType, ARTIFACT_DEFINITIONS, EvaluationCategory, CATEGORY_LABELS, SCORING_WEIGHTS } from "@/types";
 
 export interface SidePanelArtifact {
   id: string;
@@ -52,7 +52,7 @@ export function ArtifactSidePanel({
 }: ArtifactSidePanelProps) {
   const [editedContent, setEditedContent] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [viewMode, setViewMode] = useState<"edit" | "preview" | "history">("edit");
+  const [viewMode, setViewMode] = useState<"edit" | "preview" | "history" | "quality">("edit");
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const [versions, setVersions] = useState<VersionItem[]>([]);
@@ -61,6 +61,15 @@ export function ArtifactSidePanel({
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [isSubmittingForApproval, setIsSubmittingForApproval] = useState(false);
   const [openQuestionsWarning, setOpenQuestionsWarning] = useState<string[]>([]);
+  const [qualityData, setQualityData] = useState<{
+    overallScore: number;
+    interpretation: string;
+    categoryScores: Record<EvaluationCategory, number>;
+    recommendations: string[];
+    structuralAnalysis: { presentSections: string[]; missingSections: string[]; sectionOrderCorrect: boolean };
+    aiRiskIndicators: string[];
+  } | null>(null);
+  const [qualityLoading, setQualityLoading] = useState(false);
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -72,6 +81,12 @@ export function ArtifactSidePanel({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // If artifact content is updated externally (e.g. chat Q&A response),
+  // clear local dirty state so the editor reflects the latest server-backed content.
+  useEffect(() => {
+    setEditedContent(null);
+  }, [artifact?.id, artifact?.content]);
+
   // Load versions when history tab is opened
   useEffect(() => {
     if (viewMode !== "history" || !artifact || !projectId) return;
@@ -82,6 +97,23 @@ export function ArtifactSidePanel({
       .catch(() => setVersions([]))
       .finally(() => setLoadingVersions(false));
   }, [viewMode, artifact, projectId]);
+
+  // Load quality analysis when quality tab is opened
+  const fetchQuality = useCallback(async () => {
+    if (!artifact || !projectId) return;
+    setQualityLoading(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/artifacts/${artifact.id}/quality`);
+      if (res.ok) setQualityData(await res.json());
+    } catch { /* ignore */ }
+    finally { setQualityLoading(false); }
+  }, [artifact, projectId]);
+
+  useEffect(() => {
+    if (viewMode === "quality" && !qualityData && !qualityLoading) {
+      fetchQuality();
+    }
+  }, [viewMode, qualityData, qualityLoading, fetchQuality]);
 
   if (!artifact && !isGenerating) return null;
 
@@ -466,6 +498,18 @@ export function ArtifactSidePanel({
                 History
               </button>
             )}
+            {projectId && (
+              <button
+                onClick={() => setViewMode("quality")}
+                className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+                  viewMode === "quality"
+                    ? "bg-white text-indigo-700 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Quality
+              </button>
+            )}
           </div>
           <button
             onClick={handleSave}
@@ -723,6 +767,113 @@ export function ArtifactSidePanel({
                     );
                   })}
                 </ol>
+              )}
+            </div>
+          ) : viewMode === "quality" ? (
+            <div className="flex-1 overflow-y-auto p-4">
+              {qualityLoading ? (
+                <div className="flex items-center justify-center py-10">
+                  <div className="w-6 h-6 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+                </div>
+              ) : qualityData ? (
+                <div className="space-y-4">
+                  {/* Overall score */}
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-indigo-50 border border-indigo-100">
+                    <div>
+                      <p className="text-xs text-gray-500">Overall Quality</p>
+                      <p className="text-2xl font-bold text-gray-900">{qualityData.overallScore}</p>
+                    </div>
+                    <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
+                      qualityData.overallScore >= 90 ? "bg-emerald-100 text-emerald-700" :
+                      qualityData.overallScore >= 75 ? "bg-blue-100 text-blue-700" :
+                      qualityData.overallScore >= 60 ? "bg-amber-100 text-amber-700" :
+                      "bg-red-100 text-red-700"
+                    }`}>
+                      {qualityData.interpretation}
+                    </span>
+                  </div>
+
+                  {/* Category scores */}
+                  <div className="space-y-2.5">
+                    <p className="text-xs font-semibold text-gray-600">Category Breakdown</p>
+                    {(Object.keys(CATEGORY_LABELS) as EvaluationCategory[]).map((cat) => {
+                      const score = qualityData.categoryScores[cat] ?? 0;
+                      const weight = SCORING_WEIGHTS[cat];
+                      return (
+                        <div key={cat}>
+                          <div className="flex items-center justify-between mb-0.5">
+                            <span className="text-[11px] text-gray-600">{CATEGORY_LABELS[cat]} <span className="text-gray-400">{Math.round(weight * 100)}%</span></span>
+                            <span className={`text-[11px] font-bold ${
+                              score >= 90 ? "text-emerald-700" : score >= 75 ? "text-blue-700" : score >= 60 ? "text-amber-700" : "text-red-700"
+                            }`}>{Math.round(score)}</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${
+                              score >= 90 ? "bg-emerald-500" : score >= 75 ? "bg-blue-500" : score >= 60 ? "bg-amber-500" : "bg-red-500"
+                            }`} style={{ width: `${Math.max(2, score)}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Missing sections */}
+                  {qualityData.structuralAnalysis.missingSections.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-600 mb-1.5">Missing Sections</p>
+                      <div className="flex flex-wrap gap-1">
+                        {qualityData.structuralAnalysis.missingSections.map((s, i) => (
+                          <span key={i} className="text-[10px] px-1.5 py-0.5 bg-red-50 text-red-600 rounded border border-red-100">{s}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* AI risk */}
+                  {qualityData.aiRiskIndicators.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-600 mb-1.5">AI Risk Indicators</p>
+                      <ul className="space-y-1">
+                        {qualityData.aiRiskIndicators.map((r, i) => (
+                          <li key={i} className="text-[11px] text-amber-700 flex items-start gap-1">
+                            <span className="text-amber-400 shrink-0">!</span>
+                            <span>{r}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Recommendations */}
+                  {qualityData.recommendations.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-600 mb-1.5">Recommendations</p>
+                      <ul className="space-y-1">
+                        {qualityData.recommendations.slice(0, 8).map((r, i) => (
+                          <li key={i} className="text-[11px] text-gray-600 flex items-start gap-1">
+                            <span className="text-indigo-400 shrink-0">&#10095;</span>
+                            <span>{r}</span>
+                          </li>
+                        ))}
+                        {qualityData.recommendations.length > 8 && (
+                          <li className="text-[11px] text-gray-400 ml-3">+{qualityData.recommendations.length - 8} more</li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Refresh button */}
+                  <button
+                    onClick={() => { setQualityData(null); fetchQuality(); }}
+                    className="w-full text-xs font-medium text-indigo-600 hover:text-indigo-800 py-2 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
+                  >
+                    Re-analyze Quality
+                  </button>
+                </div>
+              ) : (
+                <div className="text-center py-10">
+                  <p className="text-sm text-gray-500">Unable to load quality data.</p>
+                </div>
               )}
             </div>
           ) : viewMode === "preview" ? (

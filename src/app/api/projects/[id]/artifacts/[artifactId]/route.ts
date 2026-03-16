@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { generateArtifact, scoreArtifactQuality } from "@/lib/ai";
+import { generateArtifact } from "@/lib/ai";
 import { ArtifactType, ArtifactStatus, ARTIFACT_DEFINITIONS } from "@/types";
 import { getProjectPhase } from "@/lib/workflow";
-import { extractBlockers } from "@/lib/artifactChecks";
+import { evaluateArtifactQuality } from "@/lib/artifactChecks";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
@@ -128,17 +128,18 @@ export async function PUT(
   // Guard: block submission if the document still has unresolved placeholders or open questions
   if (body.status === "awaiting_approval") {
     const contentToCheck: string = body.content ?? artifact.content ?? "";
-    const openQuestions = extractBlockers(contentToCheck);
-    const qualityScore = scoreArtifactQuality(artifact.type as ArtifactType, contentToCheck);
-    const bypassBlockers = qualityScore >= QUALITY_SUBMIT_THRESHOLD;
+    const quality = evaluateArtifactQuality(artifact.type as ArtifactType, contentToCheck);
+    const bypassBlockers = quality.confidenceScore >= QUALITY_SUBMIT_THRESHOLD;
 
-    if (openQuestions.length > 0 && !bypassBlockers) {
+    if (quality.blockers.length > 0 && !bypassBlockers) {
       return NextResponse.json(
         {
-          error: `Cannot submit for approval: ${openQuestions.length} open question(s) must be resolved first.`,
-          openQuestions,
-          qualityScore,
-          qualityPct: Math.round(qualityScore * 100),
+          error: `Cannot submit for approval: ${quality.blockers.length} open question(s) must be resolved first.`,
+          openQuestions: quality.blockers,
+          qualityScore: quality.confidenceScore,
+          qualityPct: quality.overallScore,
+          categoryScores: quality.categoryScores,
+          recommendations: quality.recommendations,
         },
         { status: 422 }
       );
@@ -154,7 +155,8 @@ export async function PUT(
   // When submitting for approval, always re-score quality on the submitted content.
   if (body.status === "awaiting_approval") {
     const contentToScore: string = body.content ?? artifact.content ?? "";
-    updateData.confidenceScore = scoreArtifactQuality(artifact.type as ArtifactType, contentToScore);
+    const quality = evaluateArtifactQuality(artifact.type as ArtifactType, contentToScore);
+    updateData.confidenceScore = quality.confidenceScore;
   }
 
   // When content changes, save current content as a version snapshot before updating
@@ -163,7 +165,8 @@ export async function PUT(
     updateData.version = { increment: 1 };
     // If we already re-scored for submission, keep that value; otherwise score now.
     if (updateData.confidenceScore === undefined) {
-      updateData.confidenceScore = scoreArtifactQuality(artifact.type as ArtifactType, body.content);
+      const quality = evaluateArtifactQuality(artifact.type as ArtifactType, body.content);
+      updateData.confidenceScore = quality.confidenceScore;
     }
   }
 

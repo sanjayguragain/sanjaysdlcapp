@@ -153,3 +153,118 @@ export const STATUS_LABELS: Record<ArtifactStatus, string> = {
   rejected: "Rejected",
   completed: "Completed",
 };
+
+// ─── Quality Evaluator Types ─────────────────────────────────────────────────
+
+export type DocumentType =
+  | "vision_document"
+  | "prd"
+  | "srs"
+  | "sad"
+  | "other";
+
+export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  vision_document: "Vision Document",
+  prd: "Product Requirements Document",
+  srs: "System Requirements Specification",
+  sad: "Solution Architecture Document",
+  other: "Other",
+};
+
+export type ScoreInterpretation =
+  | "Excellent"
+  | "Good"
+  | "Needs Improvement"
+  | "Rework Required";
+
+export function interpretScore(score: number): ScoreInterpretation {
+  if (score >= 90) return "Excellent";
+  if (score >= 75) return "Good";
+  if (score >= 60) return "Needs Improvement";
+  return "Rework Required";
+}
+
+export const INTERPRETATION_COLORS: Record<ScoreInterpretation, string> = {
+  Excellent: "bg-emerald-100 text-emerald-700",
+  Good: "bg-blue-100 text-blue-700",
+  "Needs Improvement": "bg-amber-100 text-amber-700",
+  "Rework Required": "bg-red-100 text-red-700",
+};
+
+export const INTERPRETATION_RING_COLORS: Record<ScoreInterpretation, string> = {
+  Excellent: "stroke-emerald-500",
+  Good: "stroke-blue-500",
+  "Needs Improvement": "stroke-amber-500",
+  "Rework Required": "stroke-red-500",
+};
+
+export type EvaluationCategory =
+  | "structure"
+  | "requirements_quality"
+  | "architecture_completeness"
+  | "traceability"
+  | "security"
+  | "operational_readiness"
+  | "ai_specificity";
+
+export const CATEGORY_LABELS: Record<EvaluationCategory, string> = {
+  structure: "Structure Completeness",
+  requirements_quality: "Requirements Quality",
+  architecture_completeness: "Architecture Completeness",
+  traceability: "Traceability",
+  security: "Security Coverage",
+  operational_readiness: "Operational Readiness",
+  ai_specificity: "AI Specificity Score",
+};
+
+export const CATEGORY_DESCRIPTIONS: Record<EvaluationCategory, string> = {
+  structure: "Required sections exist, follow correct order, headings present, diagrams referenced",
+  requirements_quality: "Requirements are atomic, testable, precise, and complete",
+  architecture_completeness: "System context, components, data flows, integration points documented",
+  traceability: "Business goals linked to requirements and architecture decisions",
+  security: "Security controls and threat considerations documented",
+  operational_readiness: "Monitoring, deployment, reliability design documented",
+  ai_specificity: "Content is specific and implementation-detailed rather than generic AI output",
+};
+
+export const SCORING_WEIGHTS: Record<EvaluationCategory, number> = {
+  structure: 0.20,
+  requirements_quality: 0.20,
+  architecture_completeness: 0.20,
+  traceability: 0.15,
+  security: 0.10,
+  operational_readiness: 0.10,
+  ai_specificity: 0.05,
+};
+
+export interface RecommendationItem {
+  text: string;
+  sections: string[];
+}
+
+export interface AiRiskIndicatorItem {
+  text: string;
+  sections: string[];
+}
+
+export interface EvaluationResult {
+  artifact_type: string;
+  overall_score: number;
+  interpretation: ScoreInterpretation;
+  category_scores: Record<EvaluationCategory, number>;
+  recommendations: RecommendationItem[];
+  structural_analysis: {
+    present_sections: string[];
+    missing_sections: string[];
+    section_order_correct: boolean;
+  };
+  ai_risk_indicators: AiRiskIndicatorItem[];
+}
+
+export const STRUCTURAL_QUALITY_SCALE: Record<number, string> = {
+  1: "Poor",
+  2: "Weak",
+  3: "Acceptable",
+  4: "Strong",
+  5: "Excellent",
+};

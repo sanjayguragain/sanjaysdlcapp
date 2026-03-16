@@ -7,6 +7,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─── SDLC Platform Models ────────────────────────────────────────────────────
+
 model User {
   id        String   @id @default(uuid())
   name      String
@@ -20,6 +22,8 @@ model User {
   approvals      Approval[]
   chatMessages   ChatMessage[]
   documents      Document[]
+  evalDocuments  EvalDocument[]
+  evaluations    Evaluation[]
 }
 
 model Project {
@@ -33,9 +37,9 @@ model Project {
   updatedAt    DateTime @updatedAt
   ownerId      String
 
-  owner      User          @relation(fields: [ownerId], references: [id])
-  artifacts  Artifact[]
-  documents  Document[]
+  owner        User          @relation(fields: [ownerId], references: [id])
+  artifacts    Artifact[]
+  documents    Document[]
   chatMessages ChatMessage[]
 }
 
@@ -52,8 +56,8 @@ model Artifact {
   updatedAt       DateTime @updatedAt
   ownerId         String
 
-  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  owner     User       @relation(fields: [ownerId], references: [id])
+  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner     User              @relation(fields: [ownerId], references: [id])
   approvals Approval[]
   versions  ArtifactVersion[]
 }
@@ -82,13 +86,13 @@ model Approval {
 }
 
 model Document {
-  id        String   @id @default(uuid())
-  projectId String
-  name      String
-  content   String
-  type      String
+  id           String   @id @default(uuid())
+  projectId    String
+  name         String
+  content      String
+  type         String
   uploadedById String
-  createdAt DateTime @default(now())
+  createdAt    DateTime @default(now())
 
   project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   uploadedBy User    @relation(fields: [uploadedById], references: [id])
@@ -105,4 +109,41 @@ model ChatMessage {
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user    User?   @relation(fields: [userId], references: [id])
+}
+
+// ─── Quality Evaluator Models ────────────────────────────────────────────────
+
+model EvalDocument {
+  id           String   @id @default(uuid())
+  name         String
+  artifactType String   // vision_document, prd, srs, sad, other
+  content      String   // extracted text content
+  fileType     String   // docx, pdf, md, txt
+  fileSize     Int
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  uploadedBy  User         @relation(fields: [uploadedById], references: [id])
+  evaluations Evaluation[]
+}
+
+model Evaluation {
+  id                       String   @id @default(uuid())
+  documentId               String
+  userId                   String
+  overallScore             Float    // 0-100
+  interpretation           String   // Excellent, Good, Needs Improvement, Rework Required
+  structureScore           Float    // 0-100
+  requirementsQuality      Float    // 0-100
+  architectureCompleteness Float    // 0-100
+  traceability             Float    // 0-100
+  security                 Float    // 0-100
+  operationalReadiness     Float    // 0-100
+  aiSpecificity            Float    // 0-100
+  recommendations          String   // JSON array of strings
+  reportJson               String   // Full structured evaluation report as JSON
+  createdAt                DateTime @default(now())
+
+  document EvalDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User         @relation(fields: [userId], references: [id])
 }
