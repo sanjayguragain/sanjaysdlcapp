@@ -6,6 +6,7 @@ import { getProjectPhase } from "@/lib/workflow";
 import { evaluateArtifactQuality } from "@/lib/artifactChecks";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { buildGenerationContext } from "@/lib/contextBudget";
 
 /** Format stakeholders JSON into a context block for the AI prompt. */
 function formatStakeholders(raw: string | null | undefined): string {
@@ -122,13 +123,19 @@ export async function POST(
   }
 
   // Gather context
-  const docsContent = project.documents.map((d: { content: string }) => d.content).join("\n\n");
   const existingArtifacts = project.artifacts.map((a: { type: string; content: string }) => ({
     type: a.type,
     content: a.content,
   }));
 
-  const projectContext = `Project: ${project.name}\nDescription: ${project.description || "N/A"}${formatStakeholders(project.stakeholders)}\n\nExisting Documents:\n${docsContent}\n\nExisting Artifacts:\n${existingArtifacts.map((a: { type: string; content: string }) => `[${a.type}]: ${a.content.substring(0, 500)}`).join("\n")}`;
+  const projectContext = buildGenerationContext({
+    projectName: project.name,
+    description: project.description || "N/A",
+    stakeholdersBlock: formatStakeholders(project.stakeholders),
+    documents: project.documents.map((d: { content: string }) => d.content),
+    artifacts: existingArtifacts,
+    artifactsHeading: "Existing Artifacts",
+  });
 
   const today = new Date().toISOString().slice(0, 10);
 

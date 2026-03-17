@@ -67,11 +67,13 @@ function extractArtifactUpdate(full: string): {
     };
   }
 
-  const htmlStart = full.search(/<(h1|h2|p|div|section|table|ul|ol|pre)\b/i);
-  if (htmlStart > 0) {
-    const pre = full.slice(0, htmlStart).trim();
+  // Try to find HTML content (for Traditional SDLC documents like BRD, AVD, etc.)
+  const htmlStart = full.search(/<(h[1-6]|p|div|section|table|ul|ol|pre|blockquote|article|aside)\b/i);
+  if (htmlStart >= 0) {
+    const pre = htmlStart > 0 ? full.slice(0, htmlStart).trim() : "";
     const artifactContent = full.slice(htmlStart).trim();
-    if (artifactContent.length > 300) {
+    // Accept HTML content even if shorter than 300 chars (some updates are small)
+    if (artifactContent.length >= 50) {
       return {
         chatContent: pre || "The document has been updated with industry best practices.",
         artifactContent,
@@ -79,16 +81,26 @@ function extractArtifactUpdate(full: string): {
     }
   }
 
-  const markdownStart = full.search(/(^|\n)#\s+/);
-  if (markdownStart > 0) {
-    const pre = full.slice(0, markdownStart).trim();
-    const artifactContent = full.slice(markdownStart).trim();
-    if (artifactContent.length > 300) {
+  // Try to find markdown content
+  const markdownStart = full.search(/(^|\n)#+\s+/);
+  if (markdownStart >= 0) {
+    const pre = markdownStart > 0 ? full.slice(0, markdownStart).trim() : "";
+    const artifactContent = full.slice(markdownStart < 1 ? 0 : markdownStart + 1).trim();
+    if (artifactContent.length >= 50) {
       return {
         chatContent: pre || "The document has been updated with industry best practices.",
         artifactContent,
       };
     }
+  }
+
+  // Fallback: if the entire response looks like artifact content (mostly HTML tags), treat it as such
+  const htmlTagCount = (full.match(/<[^>]+>/g) || []).length;
+  if (htmlTagCount > 5 && full.length > 100) {
+    return {
+      chatContent: "The document has been updated with industry best practices.",
+      artifactContent: full.trim(),
+    };
   }
 
   return { chatContent: full.trim(), artifactContent: null };
@@ -99,7 +111,10 @@ async function persistUpdatedArtifact(
   nextContent: string
 ) {
   const artifact = await prisma.artifact.findUnique({ where: { id: artifactId } });
-  if (!artifact || !nextContent || nextContent === artifact.content) return null;
+  if (!artifact || !nextContent) return null;
+
+  // Allow updates even if content appears identical, in case formatting changed
+  // (HTML formatting updates might be functionally identical but visually different)
 
   const before = evaluateArtifactQuality(artifact.type as any, artifact.content);
   const after = evaluateArtifactQuality(artifact.type as any, nextContent);

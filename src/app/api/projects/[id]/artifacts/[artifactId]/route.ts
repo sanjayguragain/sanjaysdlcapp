@@ -6,6 +6,7 @@ import { getProjectPhase } from "@/lib/workflow";
 import { evaluateArtifactQuality } from "@/lib/artifactChecks";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { buildGenerationContext } from "@/lib/contextBudget";
 
 /** Format stakeholders JSON into a context block for the AI prompt. */
 function formatStakeholders(raw: string | null | undefined): string {
@@ -88,12 +89,18 @@ export async function PUT(
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
-    const docsContent = project.documents.map((d) => d.content).join("\n\n");
     const otherArtifacts = project.artifacts
       .filter((a) => a.id !== artifactId)
       .map((a) => ({ type: a.type, content: a.content }));
 
-    const projectContext = `Project: ${project.name}\nDescription: ${project.description || "N/A"}${formatStakeholders(project.stakeholders)}\n\nExisting Documents:\n${docsContent}\n\nOther Artifacts:\n${otherArtifacts.map((a) => `[${a.type}]: ${a.content.substring(0, 500)}`).join("\n")}`;
+    const projectContext = buildGenerationContext({
+      projectName: project.name,
+      description: project.description || "N/A",
+      stakeholdersBlock: formatStakeholders(project.stakeholders),
+      documents: project.documents.map((d) => d.content),
+      artifacts: otherArtifacts,
+      artifactsHeading: "Other Artifacts",
+    });
 
     const session = await getServerSession(authOptions);
     const sessionUser = session?.user?.email
