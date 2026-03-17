@@ -22,5 +22,7 @@ declare module "next-auth/jwt" {
     dbId?: string;
     /** User role */
     role?: string;
+    /** GitHub OAuth access token for server-side API calls */
+    githubAccessToken?: string;
   }
 }

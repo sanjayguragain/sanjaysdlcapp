@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/Button";
@@ -23,6 +23,7 @@ interface Stakeholder {
 export default function NewProjectPage() {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2>(1);
+  const [sdlcMode, setSdlcMode] = useState<"modern" | "traditional">("modern");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [stakeholders, setStakeholders] = useState<Stakeholder[]>([]);
@@ -30,6 +31,11 @@ export default function NewProjectPage() {
   const [error, setError] = useState("");
   const [createdProjectId, setCreatedProjectId] = useState<string | null>(null);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
+
+  useEffect(() => {
+    const mode = new URLSearchParams(window.location.search).get("sdlcMode");
+    setSdlcMode(mode === "traditional" ? "traditional" : "modern");
+  }, []);
 
   const addStakeholder = () =>
     setStakeholders((prev) => [{ id: crypto.randomUUID(), name: "", role: "" }, ...prev]);
@@ -57,13 +63,14 @@ export default function NewProjectPage() {
         body: JSON.stringify({
           name: name.trim(),
           description: description.trim(),
+          sdlcMode,
           stakeholders: stakeholders.filter((s) => s.name.trim()),
         }),
       });
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || "Failed to create project");
+        throw new Error(data.error || data.details || "Failed to create project");
       }
 
       const data = await res.json();
@@ -84,6 +91,32 @@ export default function NewProjectPage() {
     setDocuments((prev) => prev.filter((d) => d.id !== id));
   }, []);
 
+  const theme = sdlcMode === "traditional"
+    ? {
+        accentText: "text-teal-700",
+        accentBg: "bg-teal-600",
+        accentBgLight: "bg-teal-50",
+        accentBorder: "border-teal-200",
+        focusRing: "focus:ring-teal-500",
+        link: "text-teal-700 hover:text-teal-900",
+      }
+    : {
+        accentText: "text-indigo-600",
+        accentBg: "bg-indigo-600",
+        accentBgLight: "bg-indigo-50",
+        accentBorder: "border-indigo-200",
+        focusRing: "focus:ring-indigo-500",
+        link: "text-indigo-600 hover:text-indigo-800",
+      };
+
+  const traditionalDocs = [
+    { key: "brd", title: "BRD", subtitle: "Business Requirements Document" },
+    { key: "avd", title: "AVD", subtitle: "Architecture Vision Document" },
+    { key: "srs", title: "SRS", subtitle: "System Requirements Specification" },
+    { key: "sad", title: "SAD", subtitle: "Solution Architecture Definition" },
+    { key: "ses", title: "SES", subtitle: "System Engineering Specification" },
+  ] as const;
+
   return (
     <div className="p-8">
       <Header
@@ -93,15 +126,15 @@ export default function NewProjectPage() {
 
       {/* Step indicator */}
       <div className="mt-4 flex items-center gap-3 max-w-2xl">
-        <div className={`flex items-center gap-2 text-sm font-medium ${step === 1 ? "text-indigo-600" : "text-gray-400"}`}>
-          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${step === 1 ? "bg-indigo-600 text-white" : "bg-green-500 text-white"}`}>
+        <div className={`flex items-center gap-2 text-sm font-medium ${step === 1 ? theme.accentText : "text-gray-400"}`}>
+          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${step === 1 ? `${theme.accentBg} text-white` : "bg-green-500 text-white"}`}>
             {step > 1 ? "✓" : "1"}
           </div>
           Project Details
         </div>
         <div className="flex-1 h-px bg-gray-200" />
-        <div className={`flex items-center gap-2 text-sm font-medium ${step === 2 ? "text-indigo-600" : "text-gray-400"}`}>
-          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${step === 2 ? "bg-indigo-600 text-white" : "bg-gray-200 text-gray-500"}`}>
+        <div className={`flex items-center gap-2 text-sm font-medium ${step === 2 ? theme.accentText : "text-gray-400"}`}>
+          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${step === 2 ? `${theme.accentBg} text-white` : "bg-gray-200 text-gray-500"}`}>
             2
           </div>
           Upload Documents
@@ -117,6 +150,18 @@ export default function NewProjectPage() {
               </div>
             )}
 
+            <div className={`rounded-lg border px-4 py-3 ${theme.accentBgLight} ${theme.accentBorder}`}>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-700">Selected SDLC Type</p>
+              <p className={`text-sm font-semibold mt-1 ${theme.accentText}`}>
+                {sdlcMode === "traditional" ? "Traditional SDLC" : "Modern SDLC"}
+              </p>
+              <p className="text-xs text-gray-600 mt-1">
+                {sdlcMode === "traditional"
+                  ? "Traditional path with BRD, AVD, SRS, SAD, and SES artifacts with staged progression."
+                  : "Modern PRD-first path where PRD and SES consolidate requirements and engineering design."}
+              </p>
+            </div>
+
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
                 Project Name *
@@ -126,7 +171,7 @@ export default function NewProjectPage() {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                className={`w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${theme.focusRing} focus:border-transparent`}
                 placeholder="e.g., Customer Portal Redesign"
               />
             </div>
@@ -140,7 +185,7 @@ export default function NewProjectPage() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={4}
-                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                className={`w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${theme.focusRing} focus:border-transparent`}
                 placeholder="Briefly describe the project, its goals, and key features..."
               />
             </div>
@@ -155,7 +200,7 @@ export default function NewProjectPage() {
                 <button
                   type="button"
                   onClick={addStakeholder}
-                  className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-800 px-2.5 py-1.5 rounded-md border border-indigo-200 hover:bg-indigo-50 transition-colors"
+                  className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors ${theme.link} ${theme.accentBorder} ${theme.accentBgLight}`}
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -173,14 +218,14 @@ export default function NewProjectPage() {
                         value={s.name}
                         onChange={(e) => updateStakeholder(s.id, "name", e.target.value)}
                         placeholder="Name"
-                        className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        className={`flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 ${theme.focusRing} focus:border-transparent`}
                       />
                       <input
                         type="text"
                         value={s.role}
                         onChange={(e) => updateStakeholder(s.id, "role", e.target.value)}
                         placeholder="Role (e.g. Product Owner)"
-                        className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        className={`flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 ${theme.focusRing} focus:border-transparent`}
                       />
                       <button
                         type="button"
@@ -220,9 +265,15 @@ export default function NewProjectPage() {
               </p>
             </div>
 
-            <div className="bg-indigo-50 border border-indigo-100 rounded-lg px-4 py-3 text-sm text-indigo-700">
-              <strong>Tip:</strong> Meeting notes, stakeholder emails, existing specs, and user research documents all make PRDs and risk analyses significantly better.
-            </div>
+            {sdlcMode === "modern" ? (
+              <div className="bg-indigo-50 border border-indigo-100 rounded-lg px-4 py-3 text-sm text-indigo-700">
+                <strong>Tip:</strong> Meeting notes, stakeholder emails, existing specs, and user research documents all make PRDs and risk analyses significantly better.
+              </div>
+            ) : (
+              <div className="bg-teal-50 border border-teal-100 rounded-lg px-4 py-3 text-sm text-teal-700">
+                <strong>Traditional SDLC mode:</strong> Choose a document below to start AI-assisted drafting for BRD/AVD/SRS/SAD/SES.
+              </div>
+            )}
 
             <DocumentUpload
               projectId={createdProjectId!}
@@ -232,14 +283,37 @@ export default function NewProjectPage() {
             />
 
             <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
-              <Button
-                type="button"
-                variant="primary"
-                size="md"
-                onClick={() => router.push(`/projects/${createdProjectId}/chat?autoGenerate=prd`)}
-              >
-                Generate PRD Now →
-              </Button>
+              {sdlcMode === "modern" ? (
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="md"
+                  onClick={() => router.push(`/projects/${createdProjectId}/chat?autoGenerate=prd`)}
+                >
+                  Generate PRD Now →
+                </Button>
+              ) : (
+                <div className="w-full space-y-2">
+                  <p className="text-xs text-gray-500">Create a traditional SDLC document draft:</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {traditionalDocs.map((doc) => (
+                      <button
+                        key={doc.key}
+                        type="button"
+                        onClick={() =>
+                          router.push(
+                            `/projects/${createdProjectId}/chat?starterDoc=${doc.key}&sdlcMode=traditional`
+                          )
+                        }
+                        className="text-left rounded-lg border border-teal-200 bg-teal-50 hover:bg-teal-100 px-3 py-2 transition-colors"
+                      >
+                        <p className="text-sm font-semibold text-teal-800">{doc.title}</p>
+                        <p className="text-xs text-teal-700">{doc.subtitle}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <Button
                 type="button"
                 variant="secondary"

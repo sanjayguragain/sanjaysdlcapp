@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { generateArtifact } from "@/lib/ai";
+import { generateArtifact, TemplateValidationError } from "@/lib/ai";
 import { ARTIFACT_DEFINITIONS, ArtifactType, ArtifactStatus } from "@/types";
 import { getProjectPhase } from "@/lib/workflow";
 import { evaluateArtifactQuality } from "@/lib/artifactChecks";
@@ -20,6 +20,14 @@ function formatStakeholders(raw: string | null | undefined): string {
 }
 
 const MAX_VERSIONS = 50;
+
+const STANDALONE_ARTIFACT_LABELS: Partial<Record<ArtifactType, string>> = {
+  brd: "Business Requirements Document",
+  avd: "Architecture Vision Document",
+  srs: "System Requirements Specification",
+  sad: "Solution Architecture Definition",
+  ses: "System Engineering Specification",
+};
 
 async function saveVersionSnapshot(
   artifactId: string,
@@ -41,7 +49,14 @@ async function saveVersionSnapshot(
   }
 }
 
-const VALID_TYPES: ArtifactType[] = ARTIFACT_DEFINITIONS.map((d) => d.type);
+const VALID_TYPES: ArtifactType[] = [
+  "brd",
+  "avd",
+  "srs",
+  "sad",
+  "ses",
+  ...ARTIFACT_DEFINITIONS.map((d) => d.type),
+];
 
 export async function GET(
   _req: NextRequest,
@@ -90,7 +105,8 @@ export async function POST(
   }
 
   const def = ARTIFACT_DEFINITIONS.find((d) => d.type === type);
-  if (!def) {
+  const artifactLabel = def?.label ?? STANDALONE_ARTIFACT_LABELS[type as ArtifactType];
+  if (!artifactLabel) {
     return NextResponse.json({ error: "Unknown artifact type" }, { status: 400 });
   }
 
@@ -117,17 +133,31 @@ export async function POST(
   const today = new Date().toISOString().slice(0, 10);
 
   // Generate content
-  const result = await generateArtifact(
-    type as ArtifactType,
-    projectContext,
-    undefined,
-    { authorName: user.name, createdDate: today, isUpdate: false }
-  );
+  let result;
+  try {
+    result = await generateArtifact(
+      type as ArtifactType,
+      projectContext,
+      undefined,
+      { authorName: user.name, createdDate: today, isUpdate: false }
+    );
+  } catch (error) {
+    if (error instanceof TemplateValidationError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          missingHeadings: error.missingHeadings,
+        },
+        { status: 422 }
+      );
+    }
+    throw error;
+  }
 
   const artifact = await prisma.artifact.create({
     data: {
       type,
-      title: def.label,
+      title: artifactLabel,
       content: result.content,
       status: "generated",
       confidenceScore: result.metadata?.confidenceScore ?? 0.85,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { generateArtifact } from "@/lib/ai";
+import { generateArtifact, TemplateValidationError } from "@/lib/ai";
 import { ArtifactType, ArtifactStatus, ARTIFACT_DEFINITIONS } from "@/types";
 import { getProjectPhase } from "@/lib/workflow";
 import { evaluateArtifactQuality } from "@/lib/artifactChecks";
@@ -102,12 +102,26 @@ export async function PUT(
     const authorName = sessionUser?.name ?? "Unknown";
     const today = new Date().toISOString().slice(0, 10);
 
-    const result = await generateArtifact(
-      artifact.type as ArtifactType,
-      projectContext,
-      undefined,
-      { authorName, createdDate: today, isUpdate: true, changeSummary: "Document regenerated" }
-    );
+    let result;
+    try {
+      result = await generateArtifact(
+        artifact.type as ArtifactType,
+        projectContext,
+        undefined,
+        { authorName, createdDate: today, isUpdate: true, changeSummary: "Document regenerated" }
+      );
+    } catch (error) {
+      if (error instanceof TemplateValidationError) {
+        return NextResponse.json(
+          {
+            error: error.message,
+            missingHeadings: error.missingHeadings,
+          },
+          { status: 422 }
+        );
+      }
+      throw error;
+    }
 
     const updated = await prisma.artifact.update({
       where: { id: artifactId },

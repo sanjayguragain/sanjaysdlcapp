@@ -7,6 +7,11 @@ export const authOptions: NextAuthOptions = {
     GitHubProvider({
       clientId: process.env.GITHUB_CLIENT_ID!,
       clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+      authorization: {
+        params: {
+          scope: "read:user user:email repo",
+        },
+      },
     }),
   ],
 
@@ -47,7 +52,11 @@ export const authOptions: NextAuthOptions = {
      * Enrich the JWT with the DB user's id and role on first login.
      * The DB round-trip is only done once (when `user` is populated, i.e. sign-in).
      */
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
+      if (account?.access_token) {
+        token.githubAccessToken = account.access_token;
+      }
+
       if (user?.email) {
         const dbUser = await prisma.user.findUnique({
           where: { email: user.email },

@@ -29,13 +29,14 @@ export async function PUT(
 ) {
   const { id } = await params;
   const body = await req.json();
-  const { name, description, status, phase } = body;
+  const { name, description, status, phase, sdlcMode } = body;
 
   const project = await prisma.project.update({
     where: { id },
     data: {
       ...(name && { name: name.trim() }),
       ...(description !== undefined && { description: description?.trim() || null }),
+      ...(sdlcMode && { sdlcMode: sdlcMode === "traditional" ? "traditional" : "modern" }),
       ...(status && { status }),
       ...(phase && { phase }),
     },

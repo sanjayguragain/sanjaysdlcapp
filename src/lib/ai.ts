@@ -1,8 +1,54 @@
 import { ArtifactType } from "@/types";
-import { buildArtifactPrompt, getPrdAgentRulesForChat } from "./skillLoader";
+import { buildArtifactPrompt, getPrdAgentRulesForChat, loadTemplate } from "./skillLoader";
 
 // Loaded once at module initialisation — cached by skillLoader, so disk I/O is a one-time cost.
 const _PRD_AGENT_RULES = getPrdAgentRulesForChat();
+const _PRD_CANONICAL_TEMPLATE = loadTemplate("PRD/PRD-{product-name-kebab-case}.md");
+
+export class TemplateValidationError extends Error {
+  missingHeadings: string[];
+
+  constructor(message: string, missingHeadings: string[]) {
+    super(message);
+    this.name = "TemplateValidationError";
+    this.missingHeadings = missingHeadings;
+  }
+}
+
+function normalizeHeading(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/&amp;/g, "and")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractCanonicalPrdHeadings(template: string): string[] {
+  return template
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => /^##\s+/.test(line))
+    .map((line) => line.replace(/^##\s+/, "").trim())
+    .filter(Boolean);
+}
+
+function extractHtmlHeadings(html: string): string[] {
+  const matches = [...html.matchAll(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi)];
+  return matches
+    .map((match) => match[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+}
+
+export function validatePrdTemplateCompliance(html: string): {
+  ok: boolean;
+  missingHeadings: string[];
+} {
+  const expected = extractCanonicalPrdHeadings(_PRD_CANONICAL_TEMPLATE);
+  const actualNormalized = new Set(extractHtmlHeadings(html).map(normalizeHeading));
+  const missingHeadings = expected.filter((heading) => !actualNormalized.has(normalizeHeading(heading)));
+  return { ok: missingHeadings.length === 0, missingHeadings };
+}
 
 /** Detect Azure reasoning models (o-series) that don't support temperature. */
 function isReasoningModel(deploymentName: string | undefined): boolean {
@@ -173,6 +219,11 @@ When the user provides answers to clarifying questions about an artifact:
 // Compile-time guard: ensures every ArtifactType has a skill mapping defined in skillLoader.
 // buildArtifactPrompt() handles unknown types gracefully, but this prevents silent gaps.
 const _ARTIFACT_TYPE_CHECK: Record<ArtifactType, true> = {
+  brd: true,
+  avd: true,
+  srs: true,
+  sad: true,
+  ses: true,
   prd: true,
   prd_validation: true,
   preliminary_estimation: true,
@@ -192,6 +243,12 @@ export interface ChatResponse {
     confidenceScore?: number;
     isArtifact?: boolean;
   };
+}
+
+export interface FeedbackSyncSource {
+  type: ArtifactType;
+  title: string;
+  content: string;
 }
 
 /** Returns a streaming Response body from the AI provider (raw SSE from OpenAI format). */
@@ -365,6 +422,51 @@ export function scoreArtifactQuality(type: ArtifactType, htmlContent: string): n
   // ── 1. Section completeness (50 pts) ──────────────────────────────────────
   // Each artifact type has a required set of sections drawn from industry standards.
   const sectionSets: Record<ArtifactType, RegExp[]> = {
+    brd: [
+      /executive\s*summary|business\s*context/,
+      /business\s*objective|goal/,
+      /scope|in\s*scope|out\s*of\s*scope/,
+      /stakeholder/,
+      /business\s*requirement/,
+      /success\s*metric|kpi/,
+      /risk|assumption|dependenc/,
+    ],
+    avd: [
+      /architecture\s*vision|target\s*architecture/,
+      /principle|design\s*principle/,
+      /constraint/,
+      /integration|interface/,
+      /technology|platform/,
+      /decision|rationale/,
+      /risk|trade[-\s]?off/,
+    ],
+    srs: [
+      /functional\s*requirement/,
+      /non[-\s]?functional|nfr/,
+      /interface\s*requirement|external\s*interface/,
+      /data\s*requirement|data\s*model/,
+      /constraint|assumption/,
+      /acceptance\s*criter/,
+      /traceability/,
+    ],
+    sad: [
+      /solution\s*architecture|architecture\s*overview/,
+      /component|module/,
+      /deployment|environment/,
+      /data\s*flow|sequence|integration/,
+      /security\s*control|threat|risk/,
+      /scalability|performance|availability/,
+      /observability|monitoring|logging/,
+    ],
+    ses: [
+      /engineering\s*specification|system\s*specification/,
+      /module|component\s*responsibilit/,
+      /interface\s*contract|api\s*contract/,
+      /constraint|operational\s*constraint/,
+      /testabilit|verification|validation/,
+      /release\s*readiness|acceptance/,
+      /risk|assumption/,
+    ],
     prd: [
       /executive\s*summary/,         // IEEE 830 §3.1
       /problem\s*statement/,          // BABOK stakeholder context
@@ -555,6 +657,40 @@ REWRITE REQUIREMENTS:
 Output ONLY the full updated HTML PRD body.`;
 }
 
+function buildPrdTemplateRepairPrompt(opts: {
+  projectContext: string;
+  draftHtml: string;
+  missingHeadings: string[];
+}): string {
+  const requiredHeadings = extractCanonicalPrdHeadings(_PRD_CANONICAL_TEMPLATE)
+    .map((heading) => `- ${heading}`)
+    .join("\n");
+  const missing = opts.missingHeadings.map((heading) => `- ${heading}`).join("\n");
+
+  return `You are repairing a PRD so it exactly matches the canonical repository template.
+
+PROJECT CONTEXT:
+${opts.projectContext}
+
+CURRENT PRD DRAFT (HTML):
+${opts.draftHtml}
+
+CANONICAL REQUIRED H2 HEADINGS IN ORDER:
+${requiredHeadings}
+
+MISSING HEADINGS THAT MUST BE ADDED:
+${missing}
+
+REPAIR RULES:
+- Preserve all valid existing content.
+- Reorganize content under the canonical headings where necessary.
+- Add every missing required H2 section using the exact heading text from the canonical template.
+- Keep the document as HTML body content only.
+- Do not ask questions.
+
+Output ONLY the full updated HTML PRD body.`;
+}
+
 /**
  * PRD multi-pass generation pipeline:
  * 1) initial generation
@@ -575,6 +711,24 @@ async function generatePrdWithQualityGates(userPrompt: string, projectContext: s
       coverage,
     });
     current = await callArtifactDirectly(expandPrompt);
+  }
+
+  const templateValidation = validatePrdTemplateCompliance(current);
+  if (!templateValidation.ok) {
+    const repairPrompt = buildPrdTemplateRepairPrompt({
+      projectContext,
+      draftHtml: current,
+      missingHeadings: templateValidation.missingHeadings,
+    });
+    current = await callArtifactDirectly(repairPrompt);
+  }
+
+  const finalTemplateValidation = validatePrdTemplateCompliance(current);
+  if (!finalTemplateValidation.ok) {
+    throw new TemplateValidationError(
+      `Generated PRD does not match canonical template. Missing headings: ${finalTemplateValidation.missingHeadings.join(", ")}`,
+      finalTemplateValidation.missingHeadings
+    );
   }
 
   return current;
@@ -617,9 +771,79 @@ export async function generateArtifact(
       },
     };
   } catch (err) {
+    if (err instanceof TemplateValidationError) {
+      throw err;
+    }
     console.error("[generateArtifact] AI call failed, using mock:", err);
     return generateMockArtifact(type, projectContext);
   }
+}
+
+function truncateForPrompt(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, maxChars)}\n\n...[truncated for prompt size]...`;
+}
+
+/**
+ * Refine an existing artifact by applying cross-artifact feedback (security,
+ * compliance, quality), while preserving document structure and revision history.
+ */
+export async function refineArtifactWithFeedback(params: {
+  artifactType: ArtifactType;
+  projectContext: string;
+  currentContent: string;
+  feedbackSources: FeedbackSyncSource[];
+  authorName?: string;
+  modifiedDate?: string;
+}): Promise<ChatResponse> {
+  const modifiedDate = params.modifiedDate ?? new Date().toISOString().slice(0, 10);
+  const authorName = params.authorName ?? "Unknown";
+
+  const feedbackBlock = params.feedbackSources
+    .map((src, i) => {
+      const content = truncateForPrompt(src.content, 9000);
+      return `SOURCE ${i + 1} — ${src.title} [${src.type}]\n${content}`;
+    })
+    .join("\n\n");
+
+  const refinementPrompt = `You are updating an EXISTING ${params.artifactType.toUpperCase()} using cross-functional review outcomes.
+
+PROJECT CONTEXT:
+${params.projectContext}
+
+CURRENT ARTIFACT (must be updated, not replaced with unrelated structure):
+${truncateForPrompt(params.currentContent, 24000)}
+
+MANDATORY FEEDBACK SOURCES TO INCORPORATE:
+${feedbackBlock}
+
+UPDATE INSTRUCTIONS (MANDATORY):
+1. Keep the document type and structure aligned to a production-grade ${params.artifactType.toUpperCase()}.
+2. Integrate actionable findings from all sources into the correct sections:
+   - Security findings -> Security / NFR / Risk sections
+   - Compliance findings -> Compliance, Governance, Data Handling sections
+   - Quality findings -> Requirements clarity, acceptance criteria, traceability, missing sections
+3. Add or update a section titled "Incorporated Review Feedback" summarizing:
+   - source artifact
+   - key finding
+   - exact document change applied
+4. Update Revision History / Document Information with a new row/entry:
+   - Date: ${modifiedDate}
+   - Author: ${authorName}
+   - Summary: "Synced Security, Compliance, and Quality feedback"
+5. Preserve existing valid content; improve rather than truncate.
+6. Return ONLY the complete updated HTML document body.
+`;
+
+  const content = await callArtifactDirectly(refinementPrompt);
+  return {
+    content,
+    metadata: {
+      artifactType: params.artifactType,
+      confidenceScore: scoreArtifactQuality(params.artifactType, content),
+      isArtifact: true,
+    },
+  };
 }
 
 function generateMockResponse(

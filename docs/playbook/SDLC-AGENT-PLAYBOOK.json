@@ -1,0 +1,43 @@
+{
+  "generated_by": {
+    "skill": "sce-sdlc-playbook-generator",
+    "version": "1.0.0"
+  },
+  "title": "SDLC Agent + Skill Playbook",
+  "scope": "workspace-specific",
+  "generated_date": "2026-03-17",
+  "workspace": "sdlc-platform",
+  "agent_count": 1,
+  "skill_count": 79,
+  "skill_category_count": 11,
+  "agents": [
+    {
+      "name": "2 - Idea & Demand - Product PRD Builder",
+      "phase": 2,
+      "phase_name": "Idea & Demand",
+      "version": "1.0.0"
+    }
+  ],
+  "skill_categories": [
+    { "name": "architecture", "count": 2 },
+    { "name": "branding", "count": 3 },
+    { "name": "code-generation", "count": 8 },
+    { "name": "compliance", "count": 4 },
+    { "name": "devops", "count": 19 },
+    { "name": "intelligence", "count": 12 },
+    { "name": "requirements-elicitation", "count": 18 },
+    { "name": "sce-adr-writer", "count": 1 },
+    { "name": "sce-ubb-writer", "count": 1 },
+    { "name": "security", "count": 9 },
+    { "name": "testing", "count": 2 }
+  ],
+  "phases": [
+    { "phase_number": 1, "phase_name": "Strategy & Planning", "agent_coverage": "TBD", "skill_coverage": "yes" },
+    { "phase_number": 2, "phase_name": "Idea & Demand", "agent_coverage": "yes", "skill_coverage": "yes" },
+    { "phase_number": 3, "phase_name": "Analysis", "agent_coverage": "TBD", "skill_coverage": "yes" },
+    { "phase_number": 4, "phase_name": "Design", "agent_coverage": "TBD", "skill_coverage": "yes" },
+    { "phase_number": 5, "phase_name": "Test & Build", "agent_coverage": "TBD", "skill_coverage": "yes" },
+    { "phase_number": 6, "phase_name": "Change & Release", "agent_coverage": "TBD", "skill_coverage": "yes" },
+    { "phase_number": 7, "phase_name": "Operate & Support", "agent_coverage": "TBD", "skill_coverage": "partial" }
+  ]
+}

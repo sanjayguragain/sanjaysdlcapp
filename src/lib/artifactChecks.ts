@@ -20,6 +20,11 @@ import {
 // ── ArtifactType → DocumentType mapping ─────────────────────────────────────
 
 const ARTIFACT_TO_DOC_TYPE: Record<ArtifactType, DocumentType> = {
+  brd: "vision_document",
+  avd: "vision_document",
+  srs: "srs",
+  sad: "sad",
+  ses: "sad",
   prd: "prd",
   prd_validation: "prd",
   preliminary_estimation: "other",

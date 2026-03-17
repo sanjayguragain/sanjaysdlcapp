@@ -27,13 +27,14 @@ interface ChatInterfaceProps {
   messages: Message[];
   onSendMessage: (content: string) => Promise<void>;
   onGenerateArtifact: (type: ArtifactType) => Promise<void>;
+  sdlcMode?: "modern" | "traditional";
   isLoading: boolean;
   documents?: Document[];
   onDocumentUploaded?: (doc: Document) => void;
   onDocumentDeleted?: (id: string) => void;
 }
 
-const QUICK_ACTIONS = [
+const MODERN_QUICK_ACTIONS = [
   { label: "Generate PRD", type: "prd" as ArtifactType },
   { label: "Risk Analysis", type: "cyber_risk_analysis" as ArtifactType },
   { label: "Compliance Report", type: "compliance_report" as ArtifactType },
@@ -41,11 +42,58 @@ const QUICK_ACTIONS = [
   { label: "Deployment Plan", type: "deployment_plan" as ArtifactType },
 ];
 
+const TRADITIONAL_QUICK_ACTIONS = [
+  { label: "Create BRD", type: "brd" as ArtifactType },
+  { label: "Create AVD", type: "avd" as ArtifactType },
+  { label: "Create SRS", type: "srs" as ArtifactType },
+  { label: "Create SAD", type: "sad" as ArtifactType },
+  { label: "Create SES", type: "ses" as ArtifactType },
+];
+
+const TRADITIONAL_ARTIFACT_MENU = [
+  { type: "brd" as ArtifactType, label: "Business Requirements Document", description: "Business objectives, scope, and requirements" },
+  { type: "avd" as ArtifactType, label: "Architecture Vision Document", description: "Target architecture vision and constraints" },
+  { type: "srs" as ArtifactType, label: "System Requirements Specification", description: "Functional and non-functional system requirements" },
+  { type: "sad" as ArtifactType, label: "Solution Architecture Definition", description: "Solution architecture and deployment views" },
+  { type: "ses" as ArtifactType, label: "System Engineering Specification", description: "Engineering-level specs and readiness criteria" },
+];
+
+const ARTIFACT_DELIM_START = "<<<ARTIFACT_UPDATE>>>";
+const ARTIFACT_DELIM_END = "<<<END_ARTIFACT_UPDATE>>>";
+const QA_DONE_MARKER = "<<<ALL_QUESTIONS_ANSWERED>>>";
+
+function sanitizeAssistantForChat(content: string): string {
+  if (!content) return content;
+
+  // Remove internal control marker if present.
+  const cleaned = content.replace(new RegExp(QA_DONE_MARKER, "g"), "").trim();
+
+  // If an artifact payload is present, keep only user-facing text around delimiters.
+  const startIdx = cleaned.indexOf(ARTIFACT_DELIM_START);
+  if (startIdx !== -1) {
+    const endIdx = cleaned.indexOf(ARTIFACT_DELIM_END, startIdx);
+    const pre = cleaned.slice(0, startIdx).replace(/\s*-{3,}\s*$/, "").trim();
+    const post = endIdx !== -1
+      ? cleaned.slice(endIdx + ARTIFACT_DELIM_END.length).replace(/^\s*-{3,}\s*/, "").trim()
+      : "";
+    return [pre, post].filter(Boolean).join("\n\n") || "The document has been updated in the editor.";
+  }
+
+  // Backward-compat safety: old messages may contain full HTML artifact bodies without delimiters.
+  const htmlTagCount = (cleaned.match(/<\/?(h[1-6]|p|ul|ol|li|table|tr|td|th|br|strong|em)\b/gi) || []).length;
+  if (htmlTagCount >= 8 && cleaned.length > 400) {
+    return "The document content is available in the editor panel. Chat shows only summary updates.";
+  }
+
+  return cleaned;
+}
+
 export function ChatInterface({
   projectId,
   messages,
   onSendMessage,
   onGenerateArtifact,
+  sdlcMode = "modern",
   isLoading,
   documents = [],
   onDocumentUploaded,
@@ -56,6 +104,10 @@ export function ChatInterface({
   const [showDocPanel, setShowDocPanel] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const quickActions = sdlcMode === "traditional" ? TRADITIONAL_QUICK_ACTIONS : MODERN_QUICK_ACTIONS;
+  const artifactMenuItems = sdlcMode === "traditional"
+    ? TRADITIONAL_ARTIFACT_MENU
+    : ARTIFACT_DEFINITIONS;
 
   const handleDocUpload = useCallback((doc: Document) => {
     onDocumentUploaded?.(doc);
@@ -99,9 +151,20 @@ export function ChatInterface({
               SDLC AI Assistant
             </h3>
             <p className="text-xs text-gray-500">
-              Generate and refine documentation artifacts
+              {sdlcMode === "traditional"
+                ? "Traditional SDLC mode: BRD, AVD, SRS, SAD, SES"
+                : "Generate and refine documentation artifacts"}
             </p>
           </div>
+          <span
+            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+              sdlcMode === "traditional"
+                ? "bg-teal-50 text-teal-700 border-teal-200"
+                : "bg-slate-50 text-slate-700 border-slate-200"
+            }`}
+          >
+            {sdlcMode === "traditional" ? "Traditional SDLC" : "Modern SDLC"}
+          </span>
         </div>
 
         {/* Document upload button */}
@@ -141,7 +204,7 @@ export function ChatInterface({
 
           {showArtifactMenu && (
             <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-10">
-              {ARTIFACT_DEFINITIONS.map((def) => (
+              {artifactMenuItems.map((def) => (
                 <button
                   key={def.type}
                   onClick={() => {
@@ -188,7 +251,7 @@ export function ChatInterface({
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center py-12">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center mb-4">
@@ -204,7 +267,7 @@ export function ChatInterface({
               requirements, identify risks, and plan deployments.
             </p>
             <div className="flex flex-wrap gap-2 justify-center">
-              {QUICK_ACTIONS.map((action) => (
+              {quickActions.map((action) => (
                 <button
                   key={action.type}
                   onClick={() => onGenerateArtifact(action.type)}
@@ -219,11 +282,14 @@ export function ChatInterface({
 
         {messages.map((msg) => {
           const metadata = msg.metadata ? JSON.parse(msg.metadata) : null;
+          const safeContent = msg.role === "assistant"
+            ? sanitizeAssistantForChat(msg.content)
+            : msg.content;
           return (
             <MessageBubble
               key={msg.id}
               role={msg.role as "user" | "assistant"}
-              content={msg.content}
+              content={safeContent}
               timestamp={msg.createdAt}
               isArtifact={metadata?.isArtifact}
               confidenceScore={metadata?.confidenceScore}
@@ -252,8 +318,11 @@ export function ChatInterface({
       </div>
 
       {/* Input */}
-      <div className="px-4 py-3 bg-white border-t border-gray-200">
-        <form onSubmit={handleSubmit} className="flex items-end gap-3">
+      <div
+        className="px-4 pt-3 bg-white border-t border-gray-200"
+        style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+      >
+        <form onSubmit={handleSubmit} className="flex items-center gap-3">
           <div className="flex-1 relative">
             <textarea
               ref={inputRef}
@@ -261,11 +330,11 @@ export function ChatInterface({
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Describe your project, ask questions, or request an artifact..."
-              className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent max-h-32"
-              rows={1}
+              className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3.5 text-sm leading-5 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent max-h-32 overflow-y-auto"
+              rows={2}
               style={{
                 height: "auto",
-                minHeight: "44px",
+                minHeight: "64px",
               }}
               onInput={(e) => {
                 const target = e.target as HTMLTextAreaElement;
@@ -279,10 +348,11 @@ export function ChatInterface({
             variant="primary"
             size="md"
             disabled={!input.trim() || isLoading}
-            className="shrink-0 !rounded-xl h-[44px] w-[44px] !p-0"
+            className="shrink-0 self-end !rounded-xl h-[44px] w-[44px] !p-0"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h12" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 6l6 6-6 6" />
             </svg>
           </Button>
         </form>

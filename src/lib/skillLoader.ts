@@ -53,6 +53,16 @@ export function loadSkill(skillRelPath: string): string {
   return stripFrontmatter(readGithubFile(`skills/${skillRelPath}`));
 }
 
+/** Load a reusable prompt from .github/prompts/<filename>. */
+export function loadPrompt(filename: string): string {
+  return stripFrontmatter(readGithubFile(`prompts/${filename}`));
+}
+
+/** Load a canonical template from .github/templates/<relative-path>. */
+export function loadTemplate(templateRelPath: string): string {
+  return stripFrontmatter(readGithubFile(`templates/${templateRelPath}`));
+}
+
 // ── Skill map: artifact type → skill file paths ───────────────────────────────
 // Each entry lists the skill files (relative to .github/skills/) that inform
 // how a given artifact type should be generated.
@@ -60,40 +70,131 @@ export function loadSkill(skillRelPath: string): string {
 const SKILL_MAP: Record<string, string[]> = {
   prd: [
     "code-generation/sce-prd-generator/SKILL.md",
-    "code-generation/sce-prd-generator/resources/prd_template_4_skeleton.md",
+    "devops/sce-requirements-gatherer/SKILL.md",
+  ],
+  brd: [
+    "requirements-elicitation/business-rules-analysis/SKILL.md",
+    "requirements-elicitation/sce-technical-requirement-writer/SKILL.md",
+    "devops/sce-requirements-gatherer/SKILL.md",
+  ],
+  avd: [
+    "architecture/sce-adr-writer/SKILL.md",
+    "code-generation/sce-flow-mapper/SKILL.md",
+  ],
+  srs: [
+    "requirements-elicitation/sce-technical-requirement-writer/SKILL.md",
+    "requirements-elicitation/use-case-2.0/SKILL.md",
+    "devops/sce-requirements-gatherer/SKILL.md",
+  ],
+  sad: [
+    "architecture/sce-adr-writer/SKILL.md",
+    "code-generation/sce-data-model-extractor/SKILL.md",
+    "code-generation/sce-flow-mapper/SKILL.md",
+  ],
+  ses: [
+    "requirements-elicitation/sce-technical-requirement-writer/SKILL.md",
+    "testing/sce-tdd-template-generator/SKILL.md",
+    "compliance/sce-config-detector/SKILL.md",
   ],
   prd_validation: [
     "requirements-elicitation/sce-6cs-quality-framework/SKILL.md",
     "requirements-elicitation/sce-technical-requirement-writer/SKILL.md",
+    "requirements-elicitation/sce-requirements-cross-reference/SKILL.md",
   ],
   preliminary_estimation: [
     "requirements-elicitation/gap-analysis/SKILL.md",
     "devops/sce-dora-metrics-calculator/SKILL.md",
+    "requirements-elicitation/sce-gap-analysis-report-generator/SKILL.md",
   ],
   cyber_risk_analysis: [
     "security/sce-vulnerability-scanner/SKILL.md",
     "security/sce-auth-auditor/SKILL.md",
     "security/sce-data-protection-reviewer/SKILL.md",
     "security/sce-security-report-generator/SKILL.md",
+    "security/sce-api-security-reviewer/SKILL.md",
+    "security/sce-input-validation-checker/SKILL.md",
   ],
   compliance_report: [
     "compliance/sce-compliance-checker/SKILL.md",
     "compliance/sce-tech-policy-resolver/SKILL.md",
+    "compliance/sce-dependency-scanner/SKILL.md",
   ],
   revised_estimation: [
     "requirements-elicitation/gap-analysis/SKILL.md",
     "devops/sce-dora-metrics-calculator/SKILL.md",
+    "requirements-elicitation/sce-gap-analysis-report-generator/SKILL.md",
   ],
   test_plan: [
     "testing/sce-tdd-template-generator/SKILL.md",
+    "testing/sce-octane-story-test-impact-analyzer/SKILL.md",
   ],
   quality_review: [
     "requirements-elicitation/sce-6cs-quality-framework/SKILL.md",
     "testing/sce-octane-story-test-impact-analyzer/SKILL.md",
+    "code-generation/sce-code-review-standards/SKILL.md",
   ],
   deployment_plan: [
     "devops/sce-build-deploy-test-workflow-generator/SKILL.md",
     "devops/sce-deploy-workflow-generator/SKILL.md",
+    "devops/sce-workflow-documenter/SKILL.md",
+  ],
+};
+
+// ── Prompt map: artifact type → prompt files ─────────────────────────────────
+// Each entry lists prompt files (relative to .github/prompts/) that further
+// guide generation for the given artifact type.
+
+const PROMPT_MAP: Record<string, string[]> = {
+  prd: [],
+  brd: [
+    "Business-Case-Builder.prompt.md",
+  ],
+  avd: [
+    "Architecture-Vision-Document.prompt.md",
+  ],
+  srs: [
+    "Architecture-for-Application-Architecture.prompt.md",
+    "Architecture-for-Data.prompt.md",
+  ],
+  sad: [
+    "Architecture-for-Application-Architecture.prompt.md",
+    "Architecture-for-Technology.prompt.md",
+  ],
+  ses: [
+    "Architecture-for-Operational-Services.prompt.md",
+  ],
+  prd_validation: [
+    "refine-artifact.prompt.md",
+  ],
+  preliminary_estimation: [
+    "run-full-pipeline.prompt.md",
+  ],
+  cyber_risk_analysis: [
+    "BETA-Architecture-Risk-Assessment.prompt.md",
+  ],
+  compliance_report: [
+    "run-full-pipeline.prompt.md",
+  ],
+  revised_estimation: [
+    "run-full-pipeline.prompt.md",
+  ],
+  test_plan: [
+    "run-full-pipeline.prompt.md",
+  ],
+  quality_review: [
+    "refine-artifact.prompt.md",
+  ],
+  deployment_plan: [
+    "run-full-pipeline.prompt.md",
+  ],
+};
+
+// ── Template map: artifact type → canonical template files ──────────────────
+// Template blocks are authoritative for section naming and ordering.
+
+const TEMPLATE_MAP: Record<string, string[]> = {
+  prd: [
+    "PRD/PRD-{product-name-kebab-case}.md",
   ],
 };
 
@@ -101,6 +202,61 @@ const SKILL_MAP: Record<string, string[]> = {
 // These instruct the LLM what to produce; the skill specs above tell it *how*.
 
 const TYPE_INSTRUCTIONS: Record<string, string> = {
+  brd: `Generate a complete Business Requirements Document (BRD) in enterprise format.
+
+Include:
+- Executive Summary and business context
+- Business goals/objectives and measurable outcomes
+- Scope (in-scope / out-of-scope)
+- Stakeholders and business process impacts
+- Detailed business requirements with numbered IDs (BR-001, BR-002...)
+- Assumptions, dependencies, risks, and constraints
+- Success metrics and acceptance criteria`,
+
+  avd: `Generate a complete Architecture Vision Document (AVD).
+
+Include:
+- Architecture vision and target-state summary
+- Architectural principles and constraints
+- Current-state vs target-state comparison
+- High-level component/integration overview
+- Technology and platform decisions with rationale
+- Key architecture risks and trade-offs
+- Governance and decision log`,
+
+  srs: `Generate a complete System Requirements Specification (SRS).
+
+Include:
+- Functional requirements with numbered IDs (FR-001, FR-002...)
+- Non-functional requirements (performance, scalability, security, availability)
+- External interface requirements
+- Data requirements and constraints
+- Assumptions and dependencies
+- Acceptance criteria and verification approach
+- Traceability references`,
+
+  sad: `Generate a complete Solution Architecture Definition (SAD).
+
+Include:
+- Architecture overview and design decisions
+- Component/module decomposition
+- Data flow and integration patterns
+- Deployment topology and environment model
+- Security architecture controls
+- Scalability, resilience, and observability considerations
+- Risks, assumptions, and implementation constraints`,
+
+  ses: `Generate a complete System Engineering Specification (SES).
+
+Include:
+- Engineering specification scope and boundaries
+- Component responsibilities and interface contracts
+- Operational and runtime constraints
+- Verification and validation criteria
+- Testability and quality gates
+- Release/readiness requirements
+- Risks, assumptions, and dependency matrix`,
+
   prd: `Generate a complete Product Requirements Document (PRD) following Template 4 structure defined in the sce-prd-generator skill above.
 
 MANDATORY requirement numbering:
@@ -122,6 +278,14 @@ COMPREHENSIVENESS REQUIREMENTS (CRITICAL):
 - Dependencies and Assumptions: List all external dependencies, integration points, and key assumptions.
 - Out of Scope: Explicitly list excluded items to prevent scope creep.
 - Risks and Mitigations: At least 5 project risks with severity, likelihood, and mitigation actions.
+- System Context Diagram: Include a dedicated section with a Mermaid system context diagram showing external actors/systems, the product boundary, and key integrations/data flows.
+  Diagram format requirement (use exactly this pattern so renderer/export can detect it):
+  <pre class="mermaid">graph TD
+    User[End User] --> App[Product System]
+    App --> IdP[Identity Provider]
+    App --> DB[(Primary Database)]
+    App --> Ext[External Service]
+  </pre>
 - Traceability Matrix: HTML table mapping Objectives → User Scenarios → Requirements → Acceptance Criteria.
 - Timeline / Milestones: Phased delivery plan with dates or relative timeline.
 
@@ -286,7 +450,29 @@ export function buildArtifactPrompt(type: string, meta?: ArtifactMeta): string {
     .filter(Boolean)
     .join("\n\n");
 
-  // 3. Generation instruction — inject document metadata for PRD
+  // 3. Canonical template specifications
+  const templateFiles = TEMPLATE_MAP[type] ?? [];
+  const templateBlocks = templateFiles
+    .map((f) => {
+      const content = loadTemplate(f);
+      if (!content) return null;
+      return `=============================================================\nCANONICAL TEMPLATE — ${f}\n=============================================================\n${content}`;
+    })
+    .filter(Boolean)
+    .join("\n\n");
+
+  // 4. Reusable prompt specifications
+  const promptFiles = PROMPT_MAP[type] ?? [];
+  const promptBlocks = promptFiles
+    .map((f) => {
+      const content = loadPrompt(f);
+      if (!content) return null;
+      return `=============================================================\nPROMPT SPECIFICATION — ${f}\n=============================================================\n${content}`;
+    })
+    .filter(Boolean)
+    .join("\n\n");
+
+  // 5. Generation instruction — inject document metadata for PRD
   let baseInstruction = TYPE_INSTRUCTIONS[type]
     ?? `Generate a comprehensive ${type.replace(/_/g, " ")} document addressing all relevant aspects of the project.`;
 
@@ -315,13 +501,15 @@ DOCUMENT INFORMATION (use these exact values — do not invent alternatives):
 
   const instruction = baseInstruction;
 
-  // 4. Universal output rules
+  // 6. Universal output rules
   const outputRules = `
 =============================================================
 OUTPUT RULES (mandatory — override any conflicting instruction above)
 =============================================================
 - DIRECT GENERATION MODE: produce the complete document NOW. Do NOT ask clarifying questions, do NOT output a Q&A table, do NOT describe what you are about to write. Start writing the document immediately.
 - Follow the structure, sections, and conventions defined by the skill specification(s) above.
+- If a CANONICAL TEMPLATE block is present above, its section names and section order are mandatory and override any conflicting instructions from prompt files or generalized guidance.
+- Do not rename, collapse, omit, or reorder canonical template sections.
 - Extract every specific fact from the Project Context provided — do NOT invent baselines, owners, system names, dates, or compliance claims.
 - For any unknown or unconfirmed information: write [To be confirmed — <reason>] inline and add a matching entry to an "Open Questions / Issues Log" section at the end.
 - Use proper semantic HTML: <h1>, <h2>, <h3>, <p>, <ul>, <ol>, <li>, <table>, <thead>, <tbody>, <tr>, <th>, <td>, <strong>, <em>.
@@ -342,7 +530,12 @@ Just write the document.
 
 `;
 
-  return `${directiveHeader}${agentBlock}${skillBlocks ? `${skillBlocks}\n\n` : ""}=============================================================\nGENERATION INSTRUCTION\n=============================================================\n${instruction}\n${outputRules}`;
+  const contextBlocks = [agentBlock, skillBlocks, templateBlocks, promptBlocks]
+    .filter((b) => !!b)
+    .map((b) => `${b}\n\n`)
+    .join("");
+
+  return `${directiveHeader}${contextBlocks}=============================================================\nGENERATION INSTRUCTION\n=============================================================\n${instruction}\n${outputRules}`;
 }
 
 /**

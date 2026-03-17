@@ -11,6 +11,11 @@ export type UserRole =
   | "Executive Stakeholder";
 
 export type ArtifactType =
+  | "brd"
+  | "avd"
+  | "srs"
+  | "sad"
+  | "ses"
   | "prd"
   | "prd_validation"
   | "preliminary_estimation"

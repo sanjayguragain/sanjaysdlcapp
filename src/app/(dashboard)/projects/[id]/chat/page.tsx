@@ -21,6 +21,7 @@ interface Message {
 interface Project {
   id: string;
   name: string;
+  sdlcMode?: "modern" | "traditional" | null;
 }
 
 interface Document {
@@ -30,6 +31,37 @@ interface Document {
   content: string;
   createdAt: string;
 }
+
+interface FeedbackSyncSummary {
+  syncedAt: string;
+  sourceArtifacts: Array<{ id: string; type: string; title: string }>;
+  before: { overallScore: number; recommendations: number; blockers: number };
+  after: { overallScore: number; recommendations: number; blockers: number };
+  delta: { overallScore: number; recommendations: number; blockers: number };
+}
+
+const TRADITIONAL_DOC_PROMPTS: Record<string, { label: string; prompt: string }> = {
+  brd: {
+    label: "BRD",
+    prompt: "Create a detailed Business Requirements Document (BRD) for this project. Include business goals, scope, stakeholders, current-state pain points, proposed business capabilities, assumptions, dependencies, risks, and measurable success criteria.",
+  },
+  avd: {
+    label: "AVD",
+    prompt: "Create an Architecture Vision Document (AVD) for this project. Include architectural principles, high-level target architecture, constraints, key integration points, technology choices, and architecture decisions with rationale.",
+  },
+  srs: {
+    label: "SRS",
+    prompt: "Create a System Requirements Specification (SRS) for this project. Include functional requirements, non-functional requirements, external interfaces, data requirements, constraints, assumptions, and acceptance criteria.",
+  },
+  sad: {
+    label: "SAD",
+    prompt: "Create a Solution Architecture Definition (SAD) for this project. Include component architecture, deployment view, data flow, integration patterns, security controls, observability considerations, and scalability strategy.",
+  },
+  ses: {
+    label: "SES",
+    prompt: "Create a System Engineering Specification (SES) for this project. Include engineering-level specifications, module responsibilities, interface contracts, operational constraints, testability requirements, and release readiness criteria.",
+  },
+};
 
 export default function ProjectChatPage() {
   const params = useParams();
@@ -45,6 +77,13 @@ export default function ProjectChatPage() {
   // Guided Q&A state — tracks which artifact we're answering questions for
   const [qaMode, setQaMode] = useState<{ artifactId: string } | null>(null);
   const qaTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const traditionalSeedTriggeredRef = useRef(false);
+  const sdlcMode: "modern" | "traditional" =
+    searchParams.get("sdlcMode") === "traditional"
+      ? "traditional"
+      : project?.sdlcMode === "traditional"
+      ? "traditional"
+      : "modern";
 
   useEffect(() => {
     async function load() {
@@ -590,6 +629,64 @@ export default function ProjectChatPage() {
     [projectId, triggerRebuild]
   );
 
+  // Seed traditional drafting prompt when coming from the Traditional SDLC chooser.
+  useEffect(() => {
+    const starterDoc = searchParams.get("starterDoc");
+    const sdlcMode = searchParams.get("sdlcMode");
+    if (traditionalSeedTriggeredRef.current) return;
+    if (sdlcMode !== "traditional" || !starterDoc) return;
+
+    const starter = TRADITIONAL_DOC_PROMPTS[starterDoc.toLowerCase()];
+    if (!starter) return;
+    traditionalSeedTriggeredRef.current = true;
+
+    const kickOffTraditionalDraft = async () => {
+      setIsLoading(true);
+
+      const tempUserId = "seed-user-" + Date.now();
+      const tempAiId = "seed-ai-" + Date.now();
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: tempUserId,
+          role: "user",
+          content: starter.prompt,
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: tempAiId,
+          role: "assistant",
+          content: `Starting ${starter.label} draft...`,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+
+      try {
+        const res = await fetch(`/api/projects/${projectId}/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: starter.prompt }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setMessages((prev) => {
+            const filtered = prev.filter((m) => m.id !== tempUserId && m.id !== tempAiId);
+            return [...filtered, data.userMessage, data.assistantMessage];
+          });
+        } else {
+          setMessages((prev) => prev.filter((m) => m.id !== tempUserId && m.id !== tempAiId));
+        }
+      } catch {
+        setMessages((prev) => prev.filter((m) => m.id !== tempUserId && m.id !== tempAiId));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void kickOffTraditionalDraft();
+  }, [projectId, searchParams]);
+
   const handleSaveArtifact = useCallback(
     async (content: string) => {
       if (!activeArtifact) return;
@@ -623,6 +720,8 @@ export default function ProjectChatPage() {
   );
 
   const [isAutofilling, setIsAutofilling] = useState(false);
+  const [isSyncingFeedback, setIsSyncingFeedback] = useState(false);
+  const [syncFeedbackSummary, setSyncFeedbackSummary] = useState<FeedbackSyncSummary | null>(null);
 
   const handleAutofillArtifact = useCallback(async () => {
     if (!activeArtifact) return;
@@ -653,26 +752,9 @@ export default function ProjectChatPage() {
       const post = acc.slice(ei + DELIM_END.length).replace(/^\s*-{3,}\s*/, "").trim();
       return [pre, post].filter(Boolean).join("\n\n") || "The document has been updated.";
     };
-    const applyAutofillUpdate = (newContent: string) => {
+    const applyAutofillUpdate = async (newContent: string) => {
       setActiveArtifact((prev) => prev ? { ...prev, content: newContent } : null);
-      // PUT triggers scoreArtifactQuality on the server — confidence score updates automatically
-      fetch(`/api/projects/${projectId}/artifacts?artifactId=${activeArtifact.id}`, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newContent }),
-      }).then((r) => r.ok ? r.json() : null).then((data) => {
-        if (data) {
-          setActiveArtifact((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  content: data.content,
-                  version: data.version,
-                  confidenceScore: data.confidenceScore ?? prev.confidenceScore,
-                }
-              : null
-          );
-        }
-      }).catch(() => {});
+      await handleSaveArtifact(newContent);
     };
 
     try {
@@ -702,11 +784,30 @@ export default function ProjectChatPage() {
                 setMessages((prev) => prev.map((m) => m.id === placeholderId ? { ...m, content: toDisplayAutofill(streamed) } : m));
               }
               if (parsed.done) {
-                const raw = parsed.assistantMessage?.content ?? streamed;
+                const raw = streamed || parsed.assistantMessage?.content || "";
                 const { chat, artifactContent } = splitAutofill(raw);
-                const finalMsg: Message = { id: parsed.assistantMessage?.id ?? placeholderId, role: "assistant", content: chat, createdAt: parsed.assistantMessage?.createdAt ?? new Date().toISOString() };
+                const finalMsg: Message = {
+                  id: parsed.assistantMessage?.id ?? placeholderId,
+                  role: "assistant",
+                  content: chat,
+                  createdAt: parsed.assistantMessage?.createdAt ?? new Date().toISOString(),
+                };
                 setMessages((prev) => prev.map((m) => m.id === placeholderId ? finalMsg : m));
-                if (artifactContent) applyAutofillUpdate(artifactContent);
+                if (parsed.updatedArtifact) {
+                  setActiveArtifact((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          content: parsed.updatedArtifact.content,
+                          version: parsed.updatedArtifact.version,
+                          confidenceScore: parsed.updatedArtifact.confidenceScore ?? prev.confidenceScore,
+                          status: parsed.updatedArtifact.status ?? prev.status,
+                        }
+                      : null
+                  );
+                } else if (artifactContent) {
+                  void applyAutofillUpdate(artifactContent);
+                }
               }
             } catch { /* ignore */ }
           }
@@ -715,12 +816,92 @@ export default function ProjectChatPage() {
         const data = await res.json();
         const { chat, artifactContent } = splitAutofill(data.assistantMessage?.content ?? "");
         setMessages((prev) => prev.map((m) => m.id === placeholderId ? { ...(data.assistantMessage ?? {}), id: placeholderId, role: "assistant", content: chat } : m));
-        if (artifactContent) applyAutofillUpdate(artifactContent);
+        if (data.updatedArtifact) {
+          setActiveArtifact((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  content: data.updatedArtifact.content,
+                  version: data.updatedArtifact.version,
+                  confidenceScore: data.updatedArtifact.confidenceScore ?? prev.confidenceScore,
+                  status: data.updatedArtifact.status ?? prev.status,
+                }
+              : null
+          );
+        } else if (artifactContent) {
+          void applyAutofillUpdate(artifactContent);
+        }
       }
     } catch {
       setMessages((prev) => prev.filter((m) => m.id !== placeholderId));
     } finally {
       setIsAutofilling(false);
+    }
+  }, [projectId, activeArtifact, handleSaveArtifact]);
+
+  const handleSyncFeedback = useCallback(async () => {
+    if (!activeArtifact || activeArtifact.type !== "prd") return;
+    setIsSyncingFeedback(true);
+    const infoId = "sync-feedback-" + Date.now();
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: infoId,
+        role: "assistant",
+        content: "Syncing PRD with Cyber Risk Analysis, Compliance Report, and Quality Review now...",
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}/artifacts/${activeArtifact.id}/sync-feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setMessages((prev) => prev.map((m) =>
+          m.id === infoId
+            ? {
+                ...m,
+                content: data?.error || "Feedback sync failed. Please ensure Security/Compliance/Quality artifacts exist.",
+              }
+            : m
+        ));
+        return;
+      }
+
+      const updated = data.artifact;
+      const summary = data.syncSummary as FeedbackSyncSummary;
+      setSyncFeedbackSummary(summary);
+
+      setActiveArtifact((prev) =>
+        prev
+          ? {
+              ...prev,
+              content: updated.content,
+              version: updated.version,
+              confidenceScore: updated.confidenceScore ?? prev.confidenceScore,
+              status: updated.status,
+            }
+          : null
+      );
+
+      const deltaText = `${summary.delta.overallScore >= 0 ? "+" : ""}${summary.delta.overallScore}`;
+      const sourcesText = summary.sourceArtifacts
+        .map((s) => `${s.title} (${s.type.replace(/_/g, " ")})`)
+        .join(", ");
+      const msg = `PRD sync from reports completed. Sources: ${sourcesText}. Overall quality ${summary.before.overallScore} -> ${summary.after.overallScore} (${deltaText}). Recommendations ${summary.before.recommendations} -> ${summary.after.recommendations}, blockers ${summary.before.blockers} -> ${summary.after.blockers}.`;
+      setMessages((prev) => prev.map((m) => (m.id === infoId ? { ...m, content: msg } : m)));
+    } catch {
+      setMessages((prev) => prev.map((m) =>
+        m.id === infoId
+          ? { ...m, content: "Feedback sync failed due to a network or server error." }
+          : m
+      ));
+    } finally {
+      setIsSyncingFeedback(false);
     }
   }, [projectId, activeArtifact]);
 
@@ -846,6 +1027,7 @@ export default function ProjectChatPage() {
               messages={messages}
               onSendMessage={handleSendMessage}
               onGenerateArtifact={handleGenerateArtifact}
+              sdlcMode={sdlcMode}
               isLoading={isLoading}
               documents={documents}
               onDocumentUploaded={(doc) => setDocuments((prev) => [...prev, doc])}
@@ -865,7 +1047,10 @@ export default function ProjectChatPage() {
               onSave={handleSaveArtifact}
               onImprove={handleImproveArtifact}
               onAutofill={handleAutofillArtifact}
+              onSyncFeedback={handleSyncFeedback}
               isAutofilling={isAutofilling}
+              isSyncingFeedback={isSyncingFeedback}
+              syncFeedbackSummary={syncFeedbackSummary}
               onSubmitForApproval={handleSubmitForApproval}
             />
           </div>

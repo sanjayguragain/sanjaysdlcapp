@@ -13,10 +13,11 @@ interface ArtifactState {
 
 interface ProgressTrackerProps {
   artifacts: ArtifactState[];
+  sdlcMode?: "modern" | "traditional";
   onArtifactClick?: (type: string) => void;
 }
 
-const PHASES = [
+const MODERN_PHASES = [
   { name: "PRD Generation", types: ["prd"] },
   { name: "Clarification", types: ["prd_validation", "preliminary_estimation"] },
   { name: "Parallel Reviews", types: ["cyber_risk_analysis", "compliance_report"] },
@@ -25,8 +26,25 @@ const PHASES = [
   { name: "Deployment", types: ["deployment_plan"] },
 ];
 
-export function ProgressTracker({ artifacts, onArtifactClick }: ProgressTrackerProps) {
+const TRADITIONAL_PHASES = [
+  { name: "Business Definition", types: ["brd"] },
+  { name: "Architecture Vision", types: ["avd"] },
+  { name: "Requirements Engineering", types: ["srs"] },
+  { name: "Solution Architecture", types: ["sad"] },
+  { name: "Engineering Specification", types: ["ses"] },
+];
+
+const TRADITIONAL_LABELS: Record<string, { label: string; owner: string }> = {
+  brd: { label: "Business Requirements Document", owner: "Business Analyst" },
+  avd: { label: "Architecture Vision Document", owner: "Enterprise Architect" },
+  srs: { label: "System Requirements Specification", owner: "Systems Analyst" },
+  sad: { label: "Solution Architecture Definition", owner: "Solution Architect" },
+  ses: { label: "System Engineering Specification", owner: "Engineering Lead" },
+};
+
+export function ProgressTracker({ artifacts, sdlcMode = "modern", onArtifactClick }: ProgressTrackerProps) {
   const artifactMap = new Map(artifacts.map((a) => [a.type, a]));
+  const phases = sdlcMode === "traditional" ? TRADITIONAL_PHASES : MODERN_PHASES;
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -35,10 +53,10 @@ export function ProgressTracker({ artifacts, onArtifactClick }: ProgressTrackerP
       </h2>
 
       <div className="space-y-6">
-        {PHASES.map((phase, phaseIndex) => (
+        {phases.map((phase, phaseIndex) => (
           <div key={phase.name} className="relative">
             {/* Phase connector */}
-            {phaseIndex < PHASES.length - 1 && (
+            {phaseIndex < phases.length - 1 && (
               <div className="absolute left-4 top-10 bottom-0 w-0.5 bg-gray-200" style={{ height: "calc(100% + 1.5rem)" }} />
             )}
 
@@ -75,7 +93,14 @@ export function ProgressTracker({ artifacts, onArtifactClick }: ProgressTrackerP
                 const definition = ARTIFACT_DEFINITIONS.find(
                   (d) => d.type === type
                 );
+                const traditionalDef = TRADITIONAL_LABELS[type];
                 const status = (artifact?.status || "not_started") as ArtifactStatus;
+                const label = sdlcMode === "traditional"
+                  ? (traditionalDef?.label ?? artifact?.title ?? type)
+                  : (definition?.label || type);
+                const owner = sdlcMode === "traditional"
+                  ? (traditionalDef?.owner ?? "Traditional SDLC")
+                  : (definition?.owner ?? "");
 
                 return (
                   <button
@@ -85,10 +110,10 @@ export function ProgressTracker({ artifacts, onArtifactClick }: ProgressTrackerP
                   >
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-800 truncate">
-                        {definition?.label || type}
+                        {label}
                       </p>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        {definition?.owner}
+                        {owner}
                       </p>
                     </div>
                     <Badge className={STATUS_COLORS[status]}>

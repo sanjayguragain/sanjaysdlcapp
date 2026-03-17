@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { generateChatResponse, streamChatResponse } from "@/lib/ai";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { evaluateArtifactQuality } from "@/lib/artifactChecks";
 
 /** Format stakeholders JSON into a context block for the AI prompt. */
 function formatStakeholders(raw: string | null | undefined): string {
@@ -19,6 +20,108 @@ function formatStakeholders(raw: string | null | undefined): string {
 type ChatMsg = Awaited<ReturnType<typeof prisma.chatMessage.findFirst>>;
 type Doc = Awaited<ReturnType<typeof prisma.document.findFirst>>;
 type Art = Awaited<ReturnType<typeof prisma.artifact.findFirst>>;
+
+const ARTIFACT_DELIM_START = "<<<ARTIFACT_UPDATE>>>";
+const ARTIFACT_DELIM_END = "<<<END_ARTIFACT_UPDATE>>>";
+const MAX_VERSIONS = 50;
+
+async function saveVersionSnapshot(
+  artifactId: string,
+  content: string,
+  version: number
+) {
+  await prisma.artifactVersion.create({
+    data: { artifactId, content, version },
+  });
+  const count = await prisma.artifactVersion.count({ where: { artifactId } });
+  if (count > MAX_VERSIONS) {
+    const oldest = await prisma.artifactVersion.findFirst({
+      where: { artifactId },
+      orderBy: { savedAt: "asc" },
+    });
+    if (oldest) {
+      await prisma.artifactVersion.delete({ where: { id: oldest.id } });
+    }
+  }
+}
+
+function extractArtifactUpdate(full: string): {
+  chatContent: string;
+  artifactContent: string | null;
+} {
+  const si = full.indexOf(ARTIFACT_DELIM_START);
+  if (si !== -1) {
+    const ei = full.indexOf(ARTIFACT_DELIM_END, si);
+    const artifactContent = ei !== -1
+      ? full.slice(si + ARTIFACT_DELIM_START.length, ei).trim()
+      : full.slice(si + ARTIFACT_DELIM_START.length).trim();
+    const pre = full.slice(0, si).replace(/\s*-{3,}\s*$/, "").trim();
+    const post = ei !== -1
+      ? full.slice(ei + ARTIFACT_DELIM_END.length).replace(/^\s*-{3,}\s*/, "").trim()
+      : "";
+    return {
+      chatContent:
+        [pre, post].filter(Boolean).join("\n\n") ||
+        "The document has been updated with industry best practices.",
+      artifactContent: artifactContent || null,
+    };
+  }
+
+  const htmlStart = full.search(/<(h1|h2|p|div|section|table|ul|ol|pre)\b/i);
+  if (htmlStart > 0) {
+    const pre = full.slice(0, htmlStart).trim();
+    const artifactContent = full.slice(htmlStart).trim();
+    if (artifactContent.length > 300) {
+      return {
+        chatContent: pre || "The document has been updated with industry best practices.",
+        artifactContent,
+      };
+    }
+  }
+
+  const markdownStart = full.search(/(^|\n)#\s+/);
+  if (markdownStart > 0) {
+    const pre = full.slice(0, markdownStart).trim();
+    const artifactContent = full.slice(markdownStart).trim();
+    if (artifactContent.length > 300) {
+      return {
+        chatContent: pre || "The document has been updated with industry best practices.",
+        artifactContent,
+      };
+    }
+  }
+
+  return { chatContent: full.trim(), artifactContent: null };
+}
+
+async function persistUpdatedArtifact(
+  artifactId: string,
+  nextContent: string
+) {
+  const artifact = await prisma.artifact.findUnique({ where: { id: artifactId } });
+  if (!artifact || !nextContent || nextContent === artifact.content) return null;
+
+  const before = evaluateArtifactQuality(artifact.type as any, artifact.content);
+  const after = evaluateArtifactQuality(artifact.type as any, nextContent);
+
+  await saveVersionSnapshot(artifactId, artifact.content, artifact.version);
+
+  const improvedBlockers = after.blockers.length < before.blockers.length;
+  const improvedOverall = after.overallScore >= before.overallScore;
+  const nextConfidenceScore = improvedBlockers && !improvedOverall
+    ? Math.max(before.confidenceScore, after.confidenceScore)
+    : after.confidenceScore;
+
+  return prisma.artifact.update({
+    where: { id: artifactId },
+    data: {
+      content: nextContent,
+      version: artifact.version + 1,
+      confidenceScore: nextConfidenceScore,
+      status: artifact.status,
+    },
+  });
+}
 
 export async function GET(
   _req: NextRequest,
@@ -79,7 +182,10 @@ export async function POST(
       `- Align with the project name, description, and uploaded documents where possible.\n` +
       `- If a value cannot be inferred from context, use the most common industry-standard default for this type of product.\n` +
       `- Keep all existing resolved content intact — only replace [To be confirmed — ...] markers.\n` +
-      `- Do NOT add new sections or restructure the document.\n` +
+      `- Do NOT add unrelated sections or change the document type/format.\n` +
+      `- If there is an Open Questions / Outstanding Items section, remove every item that has now been answered.\n` +
+      `- If all open questions are now resolved, replace that section body with: "All previously open questions have been resolved and incorporated into the document."\n` +
+      `- The final artifact should contain fewer blockers than the input artifact; never leave answered items behind in the Open Questions section.\n` +
       `Output format:\n` +
       `First output exactly one sentence: "I've autofilled all open questions using industry best practices — review the updates in the editor."\n` +
       `Then immediately output the complete updated artifact wrapped in <<<ARTIFACT_UPDATE>>> and <<<END_ARTIFACT_UPDATE>>> delimiters.`;
@@ -97,10 +203,14 @@ export async function POST(
 
     if (!autofillStream) {
       const aiResponse = await generateChatResponse(autofillMessages, autofillContext);
+      const extracted = extractArtifactUpdate(aiResponse.content);
+      const updatedArtifact = extracted.artifactContent
+        ? await persistUpdatedArtifact(artifactId, extracted.artifactContent)
+        : null;
       const assistantMessage = await prisma.chatMessage.create({
-        data: { projectId: id, role: "assistant", content: aiResponse.content },
+        data: { projectId: id, role: "assistant", content: extracted.chatContent || aiResponse.content },
       });
-      return NextResponse.json({ assistantMessage }, { status: 201 });
+      return NextResponse.json({ assistantMessage, updatedArtifact }, { status: 201 });
     }
 
     const encA = new TextEncoder();
@@ -130,10 +240,18 @@ export async function POST(
               } catch { /* ignore */ }
             }
           }
+          const extracted = extractArtifactUpdate(autofillContent);
+          const updatedArtifact = extracted.artifactContent
+            ? await persistUpdatedArtifact(artifactId, extracted.artifactContent)
+            : null;
           const assistantMessage = await prisma.chatMessage.create({
-            data: { projectId: id, role: "assistant", content: autofillContent },
+            data: {
+              projectId: id,
+              role: "assistant",
+              content: extracted.chatContent || autofillContent,
+            },
           });
-          controller.enqueue(encA.encode(`data: ${JSON.stringify({ done: true, assistantMessage })}\n\n`));
+          controller.enqueue(encA.encode(`data: ${JSON.stringify({ done: true, assistantMessage, updatedArtifact })}\n\n`));
         } catch (e) {
           console.error("[chat] autofill stream error:", e);
           controller.enqueue(encA.encode(`data: ${JSON.stringify({ error: true })}\n\n`));

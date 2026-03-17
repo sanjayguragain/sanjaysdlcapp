@@ -30,6 +30,7 @@ model Project {
   id           String   @id @default(uuid())
   name         String
   description  String?
+  sdlcMode     String   @default("modern") // modern | traditional
   stakeholders String?  // JSON: [{ name: string, role: string }]
   status       String   @default("active")
   phase        String   @default("PRD Generation")

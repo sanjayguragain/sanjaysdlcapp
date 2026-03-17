@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { ArtifactType, ArtifactStatus, ARTIFACT_DEFINITIONS, STATUS_COLORS, STATUS_LABELS, EvaluationCategory, CATEGORY_LABELS, SCORING_WEIGHTS } from "@/types";
+import { renderMermaidInElement } from "@/lib/mermaidRender";
 
 interface Approval {
   id: string;
@@ -40,6 +41,10 @@ function isHtml(text: string): boolean {
 }
 
 function formatMarkdown(text: string): string {
+  text = text.replace(/```mermaid\n([\s\S]*?)```/g, (_m, code) => {
+    return `<pre class="mermaid">${code.trim()}</pre>`;
+  });
+
   const lines = text.split("\n");
   const out: string[] = [];
   let inUl = false;
@@ -171,6 +176,7 @@ export function ArtifactViewer({
     aiRiskIndicators: string[];
   } | null>(null);
   const [qualityLoading, setQualityLoading] = useState(false);
+  const [renderedContentHtml, setRenderedContentHtml] = useState<string>(" ");
 
   const fetchQuality = useCallback(async () => {
     if (!projectId) return;
@@ -192,6 +198,22 @@ export function ArtifactViewer({
       fetchQuality();
     }
   }, [showQualityPanel, qualityData, qualityLoading, fetchQuality]);
+
+  useEffect(() => {
+    const html = isHtml(content) ? content : formatMarkdown(content);
+    let cancelled = false;
+
+    (async () => {
+      const container = document.createElement("div");
+      container.innerHTML = html;
+      await renderMermaidInElement(container);
+      if (!cancelled) setRenderedContentHtml(container.innerHTML);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [content]);
 
   const def = ARTIFACT_DEFINITIONS.find((d) => d.type === type);
   const statusColor = STATUS_COLORS[status] || "bg-gray-100 text-gray-700";
@@ -341,7 +363,7 @@ export function ArtifactViewer({
         <div className="px-8 py-6 max-h-[60vh] overflow-y-auto">
           <div
             className="prose max-w-none text-sm"
-            dangerouslySetInnerHTML={{ __html: isHtml(content) ? content : formatMarkdown(content) }}
+            dangerouslySetInnerHTML={{ __html: renderedContentHtml || (isHtml(content) ? content : formatMarkdown(content)) }}
           />
         </div>
       </div>

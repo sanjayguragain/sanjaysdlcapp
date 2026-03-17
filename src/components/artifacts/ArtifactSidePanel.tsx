@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Document, HeadingLevel, Packer, Paragraph, TextRun } from "docx";
+import { Document, HeadingLevel, ImageRun, Packer, Paragraph, TextRun } from "docx";
 import { ArtifactEditor } from "./ArtifactEditor";
 import { ArtifactType, ARTIFACT_DEFINITIONS, EvaluationCategory, CATEGORY_LABELS, SCORING_WEIGHTS } from "@/types";
+import { extractMermaidCodeFromPre, mermaidSvgToPngData, renderMermaidHtmlForExport } from "@/lib/mermaidRender";
 
 export interface SidePanelArtifact {
   id: string;
@@ -30,6 +31,7 @@ interface ArtifactSidePanelProps {
   onSave?: (content: string) => void;
   onImprove?: () => void;
   onAutofill?: () => void;
+  onSyncFeedback?: () => Promise<void>;
   onSubmitForApproval?: (content: string) => Promise<{
     ok: boolean;
     error?: string;
@@ -37,6 +39,14 @@ interface ArtifactSidePanelProps {
     qualityPct?: number;
   }>;
   isAutofilling?: boolean;
+  isSyncingFeedback?: boolean;
+  syncFeedbackSummary?: {
+    syncedAt: string;
+    sourceArtifacts: Array<{ id: string; type: string; title: string }>;
+    before: { overallScore: number; recommendations: number; blockers: number };
+    after: { overallScore: number; recommendations: number; blockers: number };
+    delta: { overallScore: number; recommendations: number; blockers: number };
+  } | null;
 }
 
 export function ArtifactSidePanel({
@@ -47,8 +57,11 @@ export function ArtifactSidePanel({
   onSave,
   onImprove,
   onAutofill,
+  onSyncFeedback,
   onSubmitForApproval,
   isAutofilling = false,
+  isSyncingFeedback = false,
+  syncFeedbackSummary = null,
 }: ArtifactSidePanelProps) {
   const [editedContent, setEditedContent] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -70,6 +83,7 @@ export function ArtifactSidePanel({
     aiRiskIndicators: string[];
   } | null>(null);
   const [qualityLoading, setQualityLoading] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState<string>("");
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -114,6 +128,20 @@ export function ArtifactSidePanel({
       fetchQuality();
     }
   }, [viewMode, qualityData, qualityLoading, fetchQuality]);
+
+  useEffect(() => {
+    if (!artifact) return;
+    const source = editedContent ?? artifact.content;
+    const html = /<[a-z][\s\S]*>/i.test(source) ? source : renderPreview(source);
+    let cancelled = false;
+    (async () => {
+      const rendered = await renderMermaidHtmlForExport(html);
+      if (!cancelled) setPreviewHtml(rendered);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [artifact, editedContent]);
 
   if (!artifact && !isGenerating) return null;
 
@@ -174,7 +202,12 @@ export function ArtifactSidePanel({
       } else if (tag === "code" && el.parentElement?.tagName.toLowerCase() !== "pre") {
         lines.push(`\`${el.textContent}\``);
       } else if (tag === "pre") {
-        lines.push(`\`\`\`\n${el.textContent}\n\`\`\`\n`);
+        const mermaidCode = extractMermaidCodeFromPre(el);
+        if (mermaidCode) {
+          lines.push(`\`\`\`mermaid\n${mermaidCode}\n\`\`\`\n`);
+        } else {
+          lines.push(`\`\`\`\n${el.textContent}\n\`\`\`\n`);
+        }
       } else if (tag === "blockquote") {
         lines.push(`> ${el.textContent?.trim()}\n`);
       } else if (tag === "hr") {
@@ -262,8 +295,9 @@ export function ArtifactSidePanel({
 
     if (isHtml) {
       // TipTap HTML content — parse with DOMParser
-      const parsed = new DOMParser().parseFromString(content, "text/html");
-      const processEl = (el: Element) => {
+      const renderedHtml = await renderMermaidHtmlForExport(content);
+      const parsed = new DOMParser().parseFromString(renderedHtml, "text/html");
+      const processEl = async (el: Element): Promise<void> => {
         const tag = el.tagName.toLowerCase();
         if (tag === "h1") {
           children.push(new Paragraph({ text: el.textContent ?? "", heading: HeadingLevel.HEADING_1 }));
@@ -293,11 +327,36 @@ export function ArtifactSidePanel({
           }
         } else if (tag === "blockquote" || tag === "pre") {
           children.push(new Paragraph({ text: el.textContent ?? "" }));
+        } else if (tag === "div" && el.classList.contains("mermaid-svg")) {
+          const svgEl = el.querySelector("svg");
+          if (svgEl) {
+            const pngData = await mermaidSvgToPngData(svgEl.outerHTML);
+            if (pngData) {
+              children.push(
+                new Paragraph({
+                  children: [
+                    new ImageRun({
+                      data: pngData,
+                      type: "png",
+                      transformation: { width: 640, height: 360 },
+                    }),
+                  ],
+                })
+              );
+              return;
+            }
+          }
+          const fallbackCode = el.getAttribute("data-mermaid-code") || "[Mermaid diagram]";
+          children.push(new Paragraph({ text: `Mermaid diagram:\n${fallbackCode}` }));
         } else {
-          for (const child of el.children) processEl(child);
+          for (const child of el.children) {
+            await processEl(child);
+          }
         }
       };
-      for (const child of parsed.body.children) processEl(child);
+      for (const child of Array.from(parsed.body.children)) {
+        await processEl(child);
+      }
     } else {
       // Raw markdown content from AI
       const lines = content.split("\n");
@@ -338,12 +397,12 @@ export function ArtifactSidePanel({
     setShowExportMenu(false);
   };
 
-  const exportPDF = () => {
+  const exportPDF = async () => {
     if (!artifact) return;
     const content = editedContent ?? artifact.content;
     // TipTap editor outputs HTML; raw AI-generated content is markdown — detect which
     const isHtml = /<[a-z][\s\S]*>/i.test(content);
-    const htmlBody = isHtml ? content : renderPreview(content);
+    const htmlBody = await renderMermaidHtmlForExport(isHtml ? content : renderPreview(content));
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
     printWindow.document.write(`
@@ -581,6 +640,32 @@ export function ArtifactSidePanel({
             </button>
           )}
 
+          {artifact?.type === "prd" && onSyncFeedback && (
+            <button
+              onClick={() => void onSyncFeedback()}
+              disabled={isSyncingFeedback}
+              title="Update PRD using Cyber Risk Analysis, Compliance Report, and Quality Review artifacts"
+              className="px-3 py-1.5 text-xs font-medium rounded-md border border-emerald-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+            >
+              {isSyncingFeedback ? (
+                <>
+                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 100 16v-4l-3 3 3 3v-4a8 8 0 01-8-8z" />
+                  </svg>
+                  Syncing Reports…
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 5h16M4 12h16M4 19h16M9 5v14m6-14v14" />
+                  </svg>
+                  Sync From Reports
+                </>
+              )}
+            </button>
+          )}
+
           {onSubmitForApproval &&
             artifact.status !== "approved" &&
             artifact.status !== "awaiting_approval" &&
@@ -648,6 +733,28 @@ export function ArtifactSidePanel({
               </svg>
             </button>
           </div>
+        </div>
+      )}
+
+      {syncFeedbackSummary && artifact?.type === "prd" && (
+        <div className="mx-4 my-2 p-3 rounded-lg border border-emerald-200 bg-emerald-50 shrink-0">
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-xs font-semibold text-emerald-800">Report Sync Complete</p>
+            <span className="text-[10px] text-emerald-700">
+              {new Date(syncFeedbackSummary.syncedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </div>
+          <p className="text-[11px] text-emerald-700 mb-1.5">
+            Sources: {syncFeedbackSummary.sourceArtifacts
+              .map((s) => `${s.title} (${s.type.replace(/_/g, " ")})`)
+              .join(", ")}
+          </p>
+          <p className="text-[11px] text-emerald-800">
+            Score {syncFeedbackSummary.before.overallScore} {"->"} {syncFeedbackSummary.after.overallScore}
+            {" "}({syncFeedbackSummary.delta.overallScore >= 0 ? "+" : ""}{syncFeedbackSummary.delta.overallScore}),
+            Recs {syncFeedbackSummary.before.recommendations} {"->"} {syncFeedbackSummary.after.recommendations},
+            Blockers {syncFeedbackSummary.before.blockers} {"->"} {syncFeedbackSummary.after.blockers}
+          </p>
         </div>
       )}
 
@@ -881,7 +988,7 @@ export function ArtifactSidePanel({
               <div
                 className="prose text-sm text-gray-800 leading-relaxed"
                 dangerouslySetInnerHTML={{
-                  __html: (() => {
+                  __html: previewHtml || (() => {
                     const c = editedContent ?? artifact.content;
                     return /<[a-z][\s\S]*>/i.test(c) ? c : renderPreview(c);
                   })()
@@ -890,6 +997,7 @@ export function ArtifactSidePanel({
             </div>
           ) : (
           <ArtifactEditor
+            key={`${artifact.id}:${artifact.version}`}
             content={artifact.content}
             onChange={setEditedContent}
             editable={artifact.status !== "approved"}
@@ -906,6 +1014,7 @@ function renderPreview(text: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
+    .replace(/```mermaid\n([\s\S]*?)```/g, (_m, code) => `<pre class="mermaid">${code.trim()}</pre>`)
     .replace(/^### (.+)$/gm, "<h3>$1</h3>")
     .replace(/^## (.+)$/gm, "<h2>$1</h2>")
     .replace(/^# (.+)$/gm, "<h1>$1</h1>")

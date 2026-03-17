@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {},
+  experimental: {
+    optimizePackageImports: ["@tiptap/react"],
+  },
   images: {
     // Allow GitHub user avatar images
     remotePatterns: [

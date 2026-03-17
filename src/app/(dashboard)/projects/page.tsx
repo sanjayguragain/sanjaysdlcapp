@@ -5,11 +5,13 @@ import Link from "next/link";
 import { Header } from "@/components/layout/Header";
 import { ProjectCard } from "@/components/projects/ProjectCard";
 import { Button } from "@/components/ui/Button";
+import { NewProjectDropdown } from "@/components/projects/NewProjectDropdown";
 
 interface Project {
   id: string;
   name: string;
   description: string | null;
+  sdlcMode?: "modern" | "traditional" | null;
   status: string;
   phase: string;
   createdAt: string;
@@ -43,16 +45,7 @@ export default function ProjectsPage() {
       <Header
         title="Projects"
         subtitle="Manage your SDLC documentation projects"
-        actions={
-          <Link href="/projects/new">
-            <Button variant="primary" size="md">
-              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              New Project
-            </Button>
-          </Link>
-        }
+        actions={<NewProjectDropdown />}
       />
 
       <div className="mt-6">
@@ -72,11 +65,9 @@ export default function ProjectsPage() {
             <p className="text-sm text-gray-500 mb-4">
               Create your first project to start generating SDLC documentation.
             </p>
-            <Link href="/projects/new">
-              <Button variant="primary" size="md">
-                Create First Project
-              </Button>
-            </Link>
+            <div className="flex justify-center">
+              <NewProjectDropdown label="Create First Project" />
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -87,6 +78,7 @@ export default function ProjectsPage() {
                   description={project.description || ""}
                   phase={project.phase}
                   artifactCount={project._count?.artifacts || 0}
+                  sdlcMode={project.sdlcMode}
                   createdAt={project.createdAt}
                   awaitingApproval={project.awaitingApproval}
                 />
