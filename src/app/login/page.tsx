@@ -4,6 +4,8 @@ import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+const devLoginEnabled = process.env.NEXT_PUBLIC_ENABLE_DEV_LOGIN === "true";
+
 export default function LoginPage() {
   const { status } = useSession();
   const router = useRouter();
@@ -18,25 +20,32 @@ export default function LoginPage() {
   if (status === "loading" || status === "authenticated") {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 border-edison-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen bg-[#101820] flex flex-col items-center justify-center px-4">
       {/* Card */}
-      <div className="w-full max-w-md bg-gray-900 rounded-2xl shadow-2xl border border-gray-800 p-8 flex flex-col items-center gap-6">
+      <div className="w-full max-w-md bg-[#1a2330] rounded-2xl shadow-2xl border border-gray-800 p-8 flex flex-col items-center gap-6">
         {/* Logo */}
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
-            <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          <div className="w-10 h-10 bg-edison-600 rounded-xl flex items-center justify-center">
+            <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <circle cx="12" cy="12" r="3" />
+              <circle cx="4" cy="6" r="2" />
+              <circle cx="20" cy="6" r="2" />
+              <circle cx="4" cy="18" r="2" />
+              <circle cx="20" cy="18" r="2" />
+              <line x1="9.5" y1="10.5" x2="5.5" y2="7.5" />
+              <line x1="14.5" y1="10.5" x2="18.5" y2="7.5" />
+              <line x1="9.5" y1="13.5" x2="5.5" y2="16.5" />
+              <line x1="14.5" y1="13.5" x2="18.5" y2="16.5" />
             </svg>
           </div>
           <div>
-            <span className="font-bold text-white text-xl">SDLC</span>
-            <span className="text-indigo-400 text-xl font-light">Platform</span>
+            <span className="font-bold text-white text-xl">SDLC Hub</span>
           </div>
         </div>
 
@@ -59,6 +68,15 @@ export default function LoginPage() {
           Continue with GitHub
         </button>
 
+        {devLoginEnabled && (
+          <button
+            onClick={() => signIn("dev-login", { callbackUrl: "/" })}
+            className="w-full flex items-center justify-center gap-3 bg-gray-800 hover:bg-gray-700 text-gray-100 font-semibold py-3 px-5 rounded-xl transition-colors border border-gray-700"
+          >
+            Continue with Dev Login
+          </button>
+        )}
+
         <p className="text-xs text-gray-600 text-center">
           Your GitHub identity is used only to authenticate you.
           <br />
@@ -67,7 +85,7 @@ export default function LoginPage() {
       </div>
 
       <p className="mt-8 text-xs text-gray-700">
-        AI-Driven SDLC Documentation Platform
+        SDLC Hub — AI-Driven Documentation Platform
       </p>
     </div>
   );

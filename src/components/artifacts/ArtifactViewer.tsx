@@ -41,7 +41,7 @@ function isHtml(text: string): boolean {
 }
 
 function formatMarkdown(text: string): string {
-  text = text.replace(/```mermaid\n([\s\S]*?)```/g, (_m, code) => {
+  text = text.replace(/```\s*mermaid\s*\r?\n([\s\S]*?)```/gi, (_m, code) => {
     return `<pre class="mermaid">${code.trim()}</pre>`;
   });
 
@@ -304,7 +304,7 @@ export function ArtifactViewer({
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowQualityPanel((v) => !v)}
-                  className="!text-indigo-600 hover:!bg-indigo-50"
+                  className="!text-edison-600 hover:!bg-edison-50"
                 >
                   <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -370,10 +370,10 @@ export function ArtifactViewer({
 
       {/* Quality Analysis Panel */}
       {showQualityPanel && (
-        <div className="bg-white rounded-xl border border-indigo-200 overflow-hidden">
-          <div className="px-6 py-3 border-b border-indigo-100 bg-indigo-50/50">
+        <div className="bg-white rounded-xl border border-edison-200 overflow-hidden">
+          <div className="px-6 py-3 border-b border-edison-100 bg-edison-50/50">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-indigo-900 flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-edison-900 flex items-center gap-2">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
@@ -465,7 +465,7 @@ export function ArtifactViewer({
                     <ul className="space-y-1">
                       {qualityData.recommendations.slice(0, 5).map((r, i) => (
                         <li key={i} className="text-[11px] text-gray-600 flex items-start gap-1.5">
-                          <span className="text-indigo-400 shrink-0 mt-0.5">&#10095;</span>
+                          <span className="text-edison-400 shrink-0 mt-0.5">&#10095;</span>
                           <span>{r}</span>
                         </li>
                       ))}
@@ -589,7 +589,7 @@ export function ArtifactViewer({
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               rows={3}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-edison-500"
               placeholder="Add any notes about this approval..."
             />
           </div>
@@ -622,7 +622,7 @@ export function ArtifactViewer({
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               rows={3}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-edison-500"
               placeholder="Describe what needs to be changed..."
             />
           </div>

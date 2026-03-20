@@ -4,6 +4,7 @@ import { generateChatResponse, streamChatResponse } from "@/lib/ai";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { evaluateArtifactQuality } from "@/lib/artifactChecks";
+import { buildChatSkillContext } from "@/lib/skillLoader";
 
 /** Format stakeholders JSON into a context block for the AI prompt. */
 function formatStakeholders(raw: string | null | undefined): string {
@@ -180,9 +181,13 @@ export async function POST(
 
     const docsContext = project.documents.map((d: NonNullable<Doc>) => d.content).join("\n\n");
 
+    // Load agent skills, templates, and prompts for this artifact type
+    const skillRefContext = buildChatSkillContext(artifact.type);
+
     const autofillContext =
       `Project: ${project.name}\nDescription: ${project.description || "N/A"}\n\n` +
       `Uploaded documents:\n${docsContext || "None"}\n\n` +
+      (skillRefContext ? `${skillRefContext}\n\n` : "") +
       `--- ARTIFACT TO AUTOFILL ---\nType: ${artifact.type}\nTitle: ${artifact.title}\n\n` +
       `${artifact.content}\n--- END ARTIFACT ---\n\n` +
       `AUTOFILL INSTRUCTION:\n` +
@@ -193,9 +198,11 @@ export async function POST(
       `Your task: replace EVERY such placeholder with a realistic, specific, industry-standard value ` +
       `appropriate for the project context described above and the artifact type (${artifact.type}).\n` +
       `Guidelines:\n` +
+      `- PRIORITIZE the SKILL, AGENT, TEMPLATE, and PROMPT reference blocks above — they contain company-specific conventions, naming standards, architectural patterns, and quality gates. Use them as the primary source of truth for filling placeholders.\n` +
+      `- Where skills or templates define specific values, formats, or standards for this artifact type, use those EXACT values rather than generic defaults.\n` +
       `- Use concrete values (e.g. "99.9% uptime SLA", "AES-256-GCM encryption", "OAuth 2.0 + PKCE with MFA") — never leave vague language.\n` +
       `- Align with the project name, description, and uploaded documents where possible.\n` +
-      `- If a value cannot be inferred from context, use the most common industry-standard default for this type of product.\n` +
+      `- If a value cannot be inferred from skills, templates, documents, or project context, use the most common industry-standard default for this type of product.\n` +
       `- Keep all existing resolved content intact — only replace [To be confirmed — ...] markers.\n` +
       `- Do NOT add unrelated sections or change the document type/format.\n` +
       `- If there is an Open Questions / Outstanding Items section, remove every item that has now been answered.\n` +
@@ -211,13 +218,13 @@ export async function POST(
 
     let autofillStream: ReadableStream<Uint8Array> | null = null;
     try {
-      autofillStream = await streamChatResponse(autofillMessages, autofillContext);
+      autofillStream = await streamChatResponse(autofillMessages, autofillContext, artifact.type);
     } catch (e) {
       console.error("[chat] autofill stream threw:", e);
     }
 
     if (!autofillStream) {
-      const aiResponse = await generateChatResponse(autofillMessages, autofillContext);
+      const aiResponse = await generateChatResponse(autofillMessages, autofillContext, artifact.type);
       const extracted = extractArtifactUpdate(aiResponse.content);
       const updatedArtifact = extracted.artifactContent
         ? await persistUpdatedArtifact(artifactId, extracted.artifactContent)
@@ -351,13 +358,13 @@ export async function POST(
 
     let rebuildStream: ReadableStream<Uint8Array> | null = null;
     try {
-      rebuildStream = await streamChatResponse(rebuildMessages, projectContext);
+      rebuildStream = await streamChatResponse(rebuildMessages, projectContext, artifact.type);
     } catch (e) {
       console.error("[chat] rebuild stream threw:", e);
     }
 
     if (!rebuildStream) {
-      const aiResponse = await generateChatResponse(rebuildMessages, projectContext);
+      const aiResponse = await generateChatResponse(rebuildMessages, projectContext, artifact.type);
       const assistantMessage = await prisma.chatMessage.create({
         data: { projectId: id, role: "assistant", content: aiResponse.content },
       });
@@ -529,8 +536,10 @@ export async function POST(
 
   // If editing a specific artifact, inject its full content as focused context
   let editContext = "";
+  let chatArtifactType: string | undefined;
   if (artifactId && typeof artifactId === "string") {
     const targetArtifact = project.artifacts.find((a: NonNullable<Art>) => a.id === artifactId);
+    if (targetArtifact) chatArtifactType = targetArtifact.type;
     if (targetArtifact) {
       // Extract remaining [To be confirmed — ...] items so the AI knows what's left to ask
       const remainingTBDs: string[] = [];
@@ -553,7 +562,7 @@ export async function POST(
   // Generate AI response — attempt streaming first, fall back to non-streaming
   let aiStream = null;
   try {
-    aiStream = await streamChatResponse(conversationHistory, projectContext);
+    aiStream = await streamChatResponse(conversationHistory, projectContext, chatArtifactType);
   } catch (e) {
     console.error("[chat] streamChatResponse threw:", e);
   }
@@ -630,7 +639,7 @@ export async function POST(
   }
 
   // Non-streaming fallback (mock mode or if streaming failed)
-  const aiResponse = await generateChatResponse(conversationHistory, projectContext);
+  const aiResponse = await generateChatResponse(conversationHistory, projectContext, chatArtifactType);
 
   const assistantMessage = await prisma.chatMessage.create({
     data: {

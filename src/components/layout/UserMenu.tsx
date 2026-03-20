@@ -38,7 +38,7 @@ export function UserMenu() {
             className="w-7 h-7 rounded-full flex-shrink-0"
           />
         ) : (
-          <div className="w-7 h-7 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+          <div className="w-7 h-7 rounded-full bg-edison-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
             {session?.user?.name?.[0]?.toUpperCase() ?? "?"}
           </div>
         )}
@@ -65,7 +65,7 @@ export function UserMenu() {
                   className="w-10 h-10 rounded-full flex-shrink-0"
                 />
               ) : (
-                <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                <div className="w-10 h-10 rounded-full bg-edison-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
                   {session?.user?.name?.[0]?.toUpperCase() ?? "?"}
                 </div>
               )}
@@ -92,7 +92,7 @@ export function UserMenu() {
                   onClick={() => { setCurrentUser(persona); setShowMenu(false); }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-colors ${
                     currentUser.id === persona.id
-                      ? "bg-indigo-50 text-indigo-700 font-medium"
+                      ? "bg-edison-50 text-edison-700 font-medium"
                       : "text-gray-700 hover:bg-gray-50"
                   }`}
                 >
@@ -104,7 +104,7 @@ export function UserMenu() {
                     <p className="text-xs text-gray-400 truncate">{persona.role}</p>
                   </div>
                   {currentUser.id === persona.id && (
-                    <svg className="w-4 h-4 text-indigo-600 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 text-edison-600 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
                     </svg>
                   )}

@@ -72,7 +72,7 @@ function MermaidNodeView({ node, updateAttributes, editor }: NodeViewProps) {
           <div className="p-3 bg-gray-900">
             <div className="text-xs text-gray-400 mb-1 font-mono select-text">%% mermaid</div>
             <textarea
-              className="w-full min-h-[140px] bg-gray-800 text-green-300 font-mono text-xs p-2 rounded border border-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-400 resize-y select-text"
+              className="w-full min-h-[140px] bg-gray-800 text-green-300 font-mono text-xs p-2 rounded border border-gray-600 focus:outline-none focus:ring-1 focus:ring-edison-400 resize-y select-text"
               value={editCode}
               onChange={(e) => setEditCode(e.target.value)}
               spellCheck={false}
@@ -82,7 +82,7 @@ function MermaidNodeView({ node, updateAttributes, editor }: NodeViewProps) {
               <button
                 type="button"
                 onClick={handleApply}
-                className="px-3 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
+                className="px-3 py-1 text-xs bg-edison-600 text-white rounded hover:bg-edison-700 transition-colors"
               >
                 Apply
               </button>
@@ -110,7 +110,7 @@ function MermaidNodeView({ node, updateAttributes, editor }: NodeViewProps) {
             <button
               type="button"
               onClick={() => setIsEditing(true)}
-              className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition-colors"
+              className="text-xs text-edison-600 hover:text-edison-800 flex items-center gap-1 transition-colors"
             >
               <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />

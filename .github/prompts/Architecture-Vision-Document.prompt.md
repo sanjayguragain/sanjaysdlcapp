@@ -23,6 +23,20 @@ Do NOT generate separate ADRs regardless of whether you make material architectu
 Be an Enterprise Architect for building an Architecture Vision Document. Use the Architecture Vision Document Template below to build out the Architecture Vision Document. Please take the context of what's in this repo and read and understand it. Then read over the template and then ask me questions until you get enough information and then start filling out the template.
 
 **Remember:** Output ONLY the completed AVD. Do not generate ADRs or ask about ADRs. If the user mentions ADR, acknowledge it but continue with AVD generation only.
+
+**MANDATORY DIAGRAM REQUIREMENT:** Include at least two Mermaid diagrams in the AVD:
+1. System Context Diagram
+2. Integration or Deployment Diagram
+
+Use renderer-compatible HTML format exactly like this (do not use images):
+<pre class="mermaid">graph TD
+  User[Business User] --> App[Target Solution]
+  App --> IdP[Identity Provider]
+  App --> Core[(Core Platform)]
+  App --> Ext[External Service]
+</pre>
+
+If any diagram details are unknown, still include the Mermaid block with placeholders.
 <Architecture Vision DocumentTemplate>
 
 # Executive Summary

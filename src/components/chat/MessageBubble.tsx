@@ -23,8 +23,8 @@ export function MessageBubble({ role, content, timestamp, isArtifact, confidence
       <div
         className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
           isUser
-            ? "bg-indigo-600 text-white"
-            : "bg-gradient-to-br from-violet-500 to-indigo-600 text-white"
+            ? "bg-edison-600 text-white"
+            : "bg-gradient-to-br from-edison-blue-500 to-edison-600 text-white"
         }`}
       >
         {isUser ? (
@@ -42,23 +42,23 @@ export function MessageBubble({ role, content, timestamp, isArtifact, confidence
       <div
         className={`max-w-[85%] ${
           isUser
-            ? "bg-indigo-600 text-white rounded-2xl rounded-tr-md px-4 py-3"
+            ? "bg-edison-600 text-white rounded-2xl rounded-tr-md px-4 py-3"
             : isArtifact
-            ? "bg-white border border-indigo-200 rounded-2xl rounded-tl-md px-5 py-4 shadow-sm"
+            ? "bg-white border border-edison-200 rounded-2xl rounded-tl-md px-5 py-4 shadow-sm"
             : "bg-white border border-gray-200 rounded-2xl rounded-tl-md px-4 py-3 shadow-sm"
         }`}
       >
         {isArtifact && (
-          <div className="flex items-center gap-2 mb-2 pb-2 border-b border-indigo-100">
-            <svg className="w-4 h-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="flex items-center gap-2 mb-2 pb-2 border-b border-edison-100">
+            <svg className="w-4 h-4 text-edison-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            <span className="text-xs font-medium text-indigo-600">
+            <span className="text-xs font-medium text-edison-600">
               Generated Artifact
             </span>
             {confidenceScore !== undefined && (
               <span className="ml-auto flex items-center gap-1.5">
-                <div className="w-16 h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                <div className="w-16 h-1.5 bg-edison-100 rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full"
                     style={{
@@ -67,7 +67,7 @@ export function MessageBubble({ role, content, timestamp, isArtifact, confidence
                     }}
                   />
                 </div>
-                <span className="text-[10px] font-medium text-indigo-500">
+                <span className="text-[10px] font-medium text-edison-500">
                   {Math.round(confidenceScore * 100)}%
                 </span>
               </span>
@@ -85,7 +85,7 @@ export function MessageBubble({ role, content, timestamp, isArtifact, confidence
         {timestamp && (
           <p
             className={`text-xs mt-2 ${
-              isUser ? "text-indigo-200" : "text-gray-400"
+              isUser ? "text-edison-200" : "text-gray-400"
             }`}
           >
             {new Date(timestamp).toLocaleTimeString([], {

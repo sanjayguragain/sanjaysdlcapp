@@ -100,7 +100,7 @@ export default function ProjectSettingsPage() {
     return (
       <div className="p-8 text-center">
         <h2 className="text-xl font-semibold text-gray-900 mb-2">Project not found</h2>
-        <Link href="/projects" className="text-indigo-600 hover:text-indigo-700">Back to projects</Link>
+        <Link href="/projects" className="text-edison-600 hover:text-edison-700">Back to projects</Link>
       </div>
     );
   }
@@ -135,7 +135,7 @@ export default function ProjectSettingsPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-edison-500 focus:border-transparent"
               placeholder="Enter project name"
             />
           </div>
@@ -146,7 +146,7 @@ export default function ProjectSettingsPage() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={4}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-edison-500 focus:border-transparent resize-none"
               placeholder="Describe the project scope and goals"
             />
           </div>
@@ -156,7 +156,7 @@ export default function ProjectSettingsPage() {
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-edison-500 focus:border-transparent bg-white"
             >
               {STATUS_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>

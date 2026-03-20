@@ -68,16 +68,16 @@ function activityIcon(item: ActivityItem) {
   }
   if (item.type === "artifact") {
     return (
-      <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
-        <svg className="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="w-8 h-8 rounded-full bg-edison-100 flex items-center justify-center">
+        <svg className="w-4 h-4 text-edison-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
       </div>
     );
   }
   return (
-    <div className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center">
-      <svg className="w-4 h-4 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <div className="w-8 h-8 rounded-full bg-edison-blue-100 flex items-center justify-center">
+      <svg className="w-4 h-4 text-edison-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
       </svg>
     </div>
@@ -88,7 +88,7 @@ const STAT_CONFIG = [
   {
     label: "Total Projects",
     key: "totalProjects" as const,
-    color: "bg-violet-50 text-violet-600",
+    color: "bg-edison-blue-50 text-edison-blue-600",
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
@@ -108,7 +108,7 @@ const STAT_CONFIG = [
   {
     label: "Artifacts Generated",
     key: "totalArtifacts" as const,
-    color: "bg-indigo-50 text-indigo-600",
+    color: "bg-edison-50 text-edison-600",
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -201,7 +201,7 @@ export default function DashboardPage() {
         <div className="lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Recent Projects</h2>
-            <Link href="/projects" className="text-sm text-indigo-600 hover:text-indigo-700 font-medium">
+            <Link href="/projects" className="text-sm text-edison-600 hover:text-edison-700 font-medium">
               View all →
             </Link>
           </div>

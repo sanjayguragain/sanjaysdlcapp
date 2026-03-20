@@ -41,6 +41,21 @@ function stripFrontmatter(content: string): string {
   return end !== -1 ? t.slice(end + 4).trimStart() : t;
 }
 
+/** Minimal YAML frontmatter key-value parser (no external dependency). */
+function parseFrontmatter(content: string): Record<string, string> {
+  const t = content.trimStart();
+  if (!t.startsWith("---")) return {};
+  const end = t.indexOf("\n---", 3);
+  if (end === -1) return {};
+  const yaml = t.slice(4, end);
+  const result: Record<string, string> = {};
+  for (const line of yaml.split("\n")) {
+    const match = line.match(/^([\w-]+)\s*:\s*(.+)$/);
+    if (match) result[match[1]] = match[2].replace(/^['"]|['"]$/g, "").trim();
+  }
+  return result;
+}
+
 // ── Public loaders ────────────────────────────────────────────────────────────
 
 /** Load an agent spec from .github/agents/<filename>. */
@@ -71,6 +86,7 @@ const SKILL_MAP: Record<string, string[]> = {
   prd: [
     "code-generation/sce-prd-generator/SKILL.md",
     "devops/sce-requirements-gatherer/SKILL.md",
+    "architecture/sce-diagram-creator/SKILL.md",
   ],
   brd: [
     "requirements-elicitation/business-rules-analysis/SKILL.md",
@@ -80,6 +96,7 @@ const SKILL_MAP: Record<string, string[]> = {
   avd: [
     "architecture/sce-adr-writer/SKILL.md",
     "code-generation/sce-flow-mapper/SKILL.md",
+    "architecture/sce-diagram-creator/SKILL.md",
   ],
   srs: [
     "requirements-elicitation/sce-technical-requirement-writer/SKILL.md",
@@ -90,11 +107,13 @@ const SKILL_MAP: Record<string, string[]> = {
     "architecture/sce-adr-writer/SKILL.md",
     "code-generation/sce-data-model-extractor/SKILL.md",
     "code-generation/sce-flow-mapper/SKILL.md",
+    "architecture/sce-diagram-creator/SKILL.md",
   ],
   ses: [
     "requirements-elicitation/sce-technical-requirement-writer/SKILL.md",
     "testing/sce-tdd-template-generator/SKILL.md",
     "compliance/sce-config-detector/SKILL.md",
+    "architecture/sce-diagram-creator/SKILL.md",
   ],
   prd_validation: [
     "requirements-elicitation/sce-6cs-quality-framework/SKILL.md",
@@ -137,8 +156,37 @@ const SKILL_MAP: Record<string, string[]> = {
     "devops/sce-build-deploy-test-workflow-generator/SKILL.md",
     "devops/sce-deploy-workflow-generator/SKILL.md",
     "devops/sce-workflow-documenter/SKILL.md",
+    "architecture/sce-diagram-creator/SKILL.md",
   ],
 };
+
+// ── Model resolution ──────────────────────────────────────────────────────────
+// Reads the `model` field from skill frontmatter for each artifact type's
+// primary skill. Returns the first explicit model found, or undefined.
+
+const _modelCache = new Map<string, string | undefined>();
+
+/**
+ * Return the preferred model for an artifact type by inspecting the frontmatter
+ * of its mapped skills. Caches results. Returns undefined when no skill
+ * specifies a model (caller should use a default).
+ */
+export function getArtifactModel(artifactType: string): string | undefined {
+  if (_modelCache.has(artifactType)) return _modelCache.get(artifactType);
+
+  const skillPaths = SKILL_MAP[artifactType] ?? [];
+  for (const p of skillPaths) {
+    const raw = readGithubFile(`skills/${p}`);
+    if (!raw) continue;
+    const fm = parseFrontmatter(raw);
+    if (fm.model && fm.model.toLowerCase() !== "auto") {
+      _modelCache.set(artifactType, fm.model);
+      return fm.model;
+    }
+  }
+  _modelCache.set(artifactType, undefined);
+  return undefined;
+}
 
 // ── Prompt map: artifact type → prompt files ─────────────────────────────────
 // Each entry lists prompt files (relative to .github/prompts/) that further
@@ -220,9 +268,26 @@ Include:
 - Architectural principles and constraints
 - Current-state vs target-state comparison
 - High-level component/integration overview
+- System Context Diagram: Include a dedicated section with a Mermaid system context diagram showing users, product boundary, external systems, and key data flows
+- Integration/Deployment Diagram: Include at least one additional Mermaid diagram for integration topology or deployment view
 - Technology and platform decisions with rationale
 - Key architecture risks and trade-offs
-- Governance and decision log`,
+- Governance and decision log
+
+Diagram format requirement (use one of these exact formats so renderer/export can detect it):
+<pre class="mermaid">graph TD
+  User[Business User] --> App[Proposed Solution]
+  App --> IdP[Identity Provider]
+  App --> Core[(Core System)]
+  App --> Ext[External Service]
+</pre>
+
+or
+
+\`\`\`mermaid
+graph TD
+  User[Business User] --> App[Proposed Solution]
+\`\`\``,
 
   srs: `Generate a complete System Requirements Specification (SRS).
 
@@ -289,8 +354,7 @@ COMPREHENSIVENESS REQUIREMENTS (CRITICAL):
 - Traceability Matrix: HTML table mapping Objectives → User Scenarios → Requirements → Acceptance Criteria.
 - Timeline / Milestones: Phased delivery plan with dates or relative timeline.
 
-Include ALL sections from the Template 4 skeleton in order. Append this watermark at the very end of the document:
-<!-- generated_by: PRD-Builder Agent v1.0.0 / sce-prd-generator Skill v1.0.0 -->`,
+Include ALL sections from the Template 4 skeleton in order. Append the watermark block exactly as defined in OUTPUT RULES at the very end of the document.`,
 
   prd_validation: `Generate a PRD Validation Report applying the 6Cs quality framework (Clear, Concise, Complete, Consistent, Correct, Confirmable) and INVEST principles as defined in the skill above.
 
@@ -472,19 +536,33 @@ export function buildArtifactPrompt(type: string, meta?: ArtifactMeta): string {
     .filter(Boolean)
     .join("\n\n");
 
+  const skillNames = skillPaths
+    .map((p) => p.split("/").slice(-2, -1)[0] ?? path.basename(p, ".md"))
+    .filter(Boolean);
+  const referencesUsed = [
+    ...(type === "prd" ? ["agents/PRD-Builder.agent.md"] : []),
+    ...templateFiles.map((f) => `templates/${f}`),
+    ...promptFiles.map((f) => `prompts/${f}`),
+  ];
+  const watermarkBlock = [
+    "<!-- generated_by: SDLC Hub Artifact Engine -->",
+    `<!-- skills_used: ${skillNames.length ? skillNames.join(", ") : "none"} -->`,
+    `<!-- references_used: ${referencesUsed.length ? referencesUsed.join(", ") : "none"} -->`,
+  ].join("\n");
+
   // 5. Generation instruction — inject document metadata for PRD
   let baseInstruction = TYPE_INSTRUCTIONS[type]
     ?? `Generate a comprehensive ${type.replace(/_/g, " ")} document addressing all relevant aspects of the project.`;
 
-  if (type === "prd" && meta) {
-    const author   = meta.authorName  ?? "[To be confirmed — author name]";
-    const date     = meta.createdDate ?? new Date().toISOString().slice(0, 10);
-    const version  = meta.isUpdate ? "[increment from current version]" : "0.1";
+  if (type === "prd") {
+    const author   = meta?.authorName  ?? "Unknown";
+    const date     = meta?.createdDate ?? new Date().toISOString().slice(0, 10);
+    const version  = meta?.isUpdate ? "[increment from current version]" : "0.1";
     const status   = "Draft";
-    const changeDesc = meta.isUpdate
-      ? (meta.changeSummary ?? "Document updated")
+    const changeDesc = meta?.isUpdate
+      ? (meta?.changeSummary ?? "Document updated")
       : "Initial document creation";
-    const revHistoryNote = meta.isUpdate
+    const revHistoryNote = meta?.isUpdate
       ? `Add a NEW row to the Revision History table for this update: Version = ${version}, Date = ${date}, Author = ${author}, Summary = "${changeDesc}" — keep all previous rows intact.`
       : `The first (and only) Revision History row must be: Version = ${version}, Date = ${date}, Author = ${author}, Summary = "${changeDesc}".`;
 
@@ -496,7 +574,9 @@ DOCUMENT INFORMATION (use these exact values — do not invent alternatives):
 - Status: ${status}
 - Author: ${author}
 - Created Date: ${date}
-- Revision History: ${revHistoryNote}`;
+- Revision History: ${revHistoryNote}
+
+These metadata values are already known. Do not ask the user for Author or Created Date.`;
   }
 
   const instruction = baseInstruction;
@@ -516,7 +596,15 @@ OUTPUT RULES (mandatory — override any conflicting instruction above)
 - Output the HTML document body content ONLY — no triple-backtick fences, no markdown headings, no preamble text, no delimiters.
 - DEPTH IS CRITICAL: Be thorough and comprehensive. Every section must contain substantive content — multiple paragraphs, specific requirements, measurable targets, and detailed rationale. A sparse document with mostly placeholders will fail quality review.
 - TARGET LENGTH: The document should be extensive enough to serve as a real enterprise deliverable. For PRDs this means 4000+ words with 15+ functional requirements. For other artifact types, aim for the level of detail a senior reviewer would expect.
-- Use your domain expertise to infer reasonable defaults, architecture patterns, and industry best practices where the project context allows — always marking assumptions clearly.`;
+- Use your domain expertise to infer reasonable defaults, architecture patterns, and industry best practices where the project context allows — always marking assumptions clearly.
+- NEVER claim the output is "too large", "exceeds token limits", or offer to split into parts. NEVER present the user with "Option A / Option B / Option C" choices about output size. You MUST produce the FULL document in a SINGLE response. Do NOT output meta-commentary about response length — just write the complete document.`;
+
+  const watermarkRules = `
+=============================================================
+WATERMARK BLOCK (mandatory — append as final lines)
+=============================================================
+Append this exact watermark block at the very end of the document body:
+${watermarkBlock}`;
 
   const directiveHeader =
 `=============================================================
@@ -535,7 +623,7 @@ Just write the document.
     .map((b) => `${b}\n\n`)
     .join("");
 
-  return `${directiveHeader}${contextBlocks}=============================================================\nGENERATION INSTRUCTION\n=============================================================\n${instruction}\n${outputRules}`;
+  return `${directiveHeader}${contextBlocks}=============================================================\nGENERATION INSTRUCTION\n=============================================================\n${instruction}\n${outputRules}\n${watermarkRules}`;
 }
 
 /**
@@ -556,4 +644,63 @@ export function getPrdAgentRulesForChat(): string {
   // Capture from Global Rules to Boundaries (or end of file)
   const end = boundariesIdx !== -1 ? boundariesIdx : agent.length;
   return agent.slice(globalIdx, end).trim();
+}
+
+/**
+ * Build a skill-context block for use in the CHAT system prompt.
+ * Unlike buildArtifactPrompt(), this does NOT include generation instructions
+ * or "direct generation" directives — it provides the agent spec, skills,
+ * templates, and prompts as *reference material* so the chat AI has full
+ * domain knowledge when discussing or updating artifacts.
+ *
+ * Returns an empty string when no skills are mapped for the given type.
+ */
+export function buildChatSkillContext(artifactType: string): string {
+  // 1. Agent spec
+  const rawAgent = artifactType === "prd" ? loadAgent("PRD-Builder.agent.md") : "";
+  const agentBlock = rawAgent
+    ? `=== AGENT REFERENCE — PRD-Builder ===\n${rawAgent}\n\n`
+    : "";
+
+  // 2. Skills
+  const skillPaths = SKILL_MAP[artifactType] ?? [];
+  const skillBlocks = skillPaths
+    .map((p) => {
+      const content = loadSkill(p);
+      if (!content) return null;
+      const skillName = p.split("/").slice(-2, -1)[0] ?? path.basename(p, ".md");
+      return `=== SKILL — ${skillName} ===\n${content}`;
+    })
+    .filter(Boolean)
+    .join("\n\n");
+
+  // 3. Templates
+  const templateFiles = TEMPLATE_MAP[artifactType] ?? [];
+  const templateBlocks = templateFiles
+    .map((f) => {
+      const content = loadTemplate(f);
+      if (!content) return null;
+      return `=== TEMPLATE — ${f} ===\n${content}`;
+    })
+    .filter(Boolean)
+    .join("\n\n");
+
+  // 4. Prompts
+  const promptFiles = PROMPT_MAP[artifactType] ?? [];
+  const promptBlocks = promptFiles
+    .map((f) => {
+      const content = loadPrompt(f);
+      if (!content) return null;
+      return `=== PROMPT — ${f} ===\n${content}`;
+    })
+    .filter(Boolean)
+    .join("\n\n");
+
+  const blocks = [agentBlock, skillBlocks, templateBlocks, promptBlocks]
+    .filter(Boolean)
+    .join("\n\n");
+
+  if (!blocks.trim()) return "";
+
+  return `\n\n=== SKILL & REFERENCE CONTEXT FOR ${artifactType.toUpperCase()} ===\nThe following agents, skills, templates, and prompts define how ${artifactType.replace(/_/g, " ")} artifacts should be structured. Use them as authoritative reference when discussing, reviewing, or updating this artifact type.\n\n${blocks}`;
 }

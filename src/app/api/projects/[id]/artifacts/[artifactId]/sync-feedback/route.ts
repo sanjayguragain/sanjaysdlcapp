@@ -76,10 +76,13 @@ export async function POST(
   const projectContext = `Project: ${project.name}\nDescription: ${project.description || "N/A"}${formatStakeholders(project.stakeholders)}\n\nDocuments:\n${docsContext || "None"}`;
 
   const session = await getServerSession(authOptions);
-  const sessionUser = session?.user?.email
-    ? await prisma.user.findUnique({ where: { email: session.user.email }, select: { name: true } })
-    : null;
-  const authorName = sessionUser?.name ?? "Unknown";
+  const authorName =
+    session?.user?.name ??
+    session?.user?.email ??
+    (session?.user?.email
+      ? (await prisma.user.findUnique({ where: { email: session.user.email }, select: { name: true } }))?.name
+      : null) ??
+    "Unknown";
   const today = new Date().toISOString().slice(0, 10);
 
   const refined = await refineArtifactWithFeedback({

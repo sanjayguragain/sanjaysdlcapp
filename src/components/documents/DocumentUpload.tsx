@@ -143,8 +143,8 @@ export function DocumentUpload({
         onClick={() => inputRef.current?.click()}
         className={`relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
           isDragging
-            ? "border-indigo-400 bg-indigo-50"
-            : "border-gray-200 bg-gray-50 hover:border-indigo-300 hover:bg-indigo-50/40"
+            ? "border-edison-400 bg-edison-50"
+            : "border-gray-200 bg-gray-50 hover:border-edison-300 hover:bg-edison-50/40"
         }`}
       >
         <input
@@ -157,9 +157,9 @@ export function DocumentUpload({
         />
         <div className="flex flex-col items-center gap-3">
           <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
-            isDragging ? "bg-indigo-100" : "bg-white border border-gray-200"
+            isDragging ? "bg-edison-100" : "bg-white border border-gray-200"
           }`}>
-            <svg className={`w-6 h-6 ${isDragging ? "text-indigo-600" : "text-gray-400"}`}
+            <svg className={`w-6 h-6 ${isDragging ? "text-edison-600" : "text-gray-400"}`}
               fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
@@ -177,7 +177,7 @@ export function DocumentUpload({
 
         {uploading.length > 0 && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/80 rounded-xl">
-            <div className="flex items-center gap-2 text-sm text-indigo-600">
+            <div className="flex items-center gap-2 text-sm text-edison-600">
               <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />

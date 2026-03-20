@@ -47,7 +47,7 @@ export function ProjectCard({
           )}
         </div>
         <div className="flex flex-col items-end gap-1.5 ml-3 shrink-0">
-          <Badge className="bg-indigo-100 text-indigo-700">
+          <Badge className="bg-edison-100 text-edison-700">
             {phase}
           </Badge>
           <Badge className={isTraditional ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}>

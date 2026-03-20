@@ -33,7 +33,7 @@ export function RecommendationList({ recommendations, aiRiskIndicators }: Recomm
       {/* Improvement Recommendations */}
       <div>
         <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-          <svg className="w-4 h-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-4 h-4 text-edison-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
           </svg>
           Improvement Recommendations ({normalized.length})
@@ -44,7 +44,7 @@ export function RecommendationList({ recommendations, aiRiskIndicators }: Recomm
           <ul className="space-y-2">
             {normalized.map((rec, i) => (
               <li key={i} className="flex items-start gap-2.5 text-sm text-gray-700">
-                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-bold mt-0.5">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-edison-100 text-edison-600 flex items-center justify-center text-[10px] font-bold mt-0.5">
                   {i + 1}
                 </span>
                 <div className="min-w-0">
@@ -54,7 +54,7 @@ export function RecommendationList({ recommendations, aiRiskIndicators }: Recomm
                       {rec.sections.map((section, idx) => (
                         <span
                           key={idx}
-                          className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-100"
+                          className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium bg-edison-50 text-edison-700 border border-edison-100"
                         >
                           {section}
                         </span>

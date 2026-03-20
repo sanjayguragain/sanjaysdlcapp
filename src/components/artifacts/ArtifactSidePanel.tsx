@@ -49,6 +49,14 @@ interface ArtifactSidePanelProps {
   } | null;
 }
 
+const BUILD_FEATURE_ROTATION = [
+  "Skills-aware templates adapt to each SDLC artifact type.",
+  "Quality analysis scores structure, completeness, and AI risk.",
+  "Version history lets you compare and restore prior drafts.",
+  "Sync feedback merges insights from related project artifacts.",
+  "Export supports markdown, PDF, and DOCX handoff formats.",
+];
+
 export function ArtifactSidePanel({
   artifact,
   projectId,
@@ -84,6 +92,7 @@ export function ArtifactSidePanel({
   } | null>(null);
   const [qualityLoading, setQualityLoading] = useState(false);
   const [previewHtml, setPreviewHtml] = useState<string>("");
+  const [activeFeatureIndex, setActiveFeatureIndex] = useState(0);
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -94,6 +103,17 @@ export function ArtifactSidePanel({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  useEffect(() => {
+    if (!isGenerating || artifact) return;
+
+    setActiveFeatureIndex(0);
+    const intervalId = window.setInterval(() => {
+      setActiveFeatureIndex((current) => (current + 1) % BUILD_FEATURE_ROTATION.length);
+    }, 2400);
+
+    return () => window.clearInterval(intervalId);
+  }, [isGenerating, artifact]);
 
   // If artifact content is updated externally (e.g. chat Q&A response),
   // clear local dirty state so the editor reflects the latest server-backed content.
@@ -446,9 +466,9 @@ export function ArtifactSidePanel({
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           {/* Document icon */}
-          <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-edison-50 flex items-center justify-center shrink-0">
             <svg
-              className="w-4 h-4 text-indigo-600"
+              className="w-4 h-4 text-edison-600"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -562,7 +582,7 @@ export function ArtifactSidePanel({
                 onClick={() => setViewMode("quality")}
                 className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
                   viewMode === "quality"
-                    ? "bg-white text-indigo-700 shadow-sm"
+                    ? "bg-white text-edison-700 shadow-sm"
                     : "text-gray-500 hover:text-gray-700"
                 }`}
               >
@@ -573,7 +593,7 @@ export function ArtifactSidePanel({
           <button
             onClick={handleSave}
             disabled={editedContent === null || isSaving}
-            className="px-3 py-1.5 text-xs font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-3 py-1.5 text-xs font-medium rounded-md bg-edison-600 text-white hover:bg-edison-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isSaving ? "Saving..." : "Save"}
           </button>
@@ -619,7 +639,7 @@ export function ArtifactSidePanel({
               onClick={onAutofill}
               disabled={isAutofilling}
               title="Answer all open questions using industry best practices and rewrite the document"
-              className="px-3 py-1.5 text-xs font-medium rounded-md border border-violet-200 text-violet-700 hover:bg-violet-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+              className="px-3 py-1.5 text-xs font-medium rounded-md border border-edison-blue-200 text-edison-blue-700 hover:bg-edison-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
             >
               {isAutofilling ? (
                 <>
@@ -761,18 +781,49 @@ export function ArtifactSidePanel({
       {/* Editor Area */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {isGenerating && !artifact ? (
-          <div className="flex flex-col items-center justify-center flex-1 gap-4">
-            <div className="relative w-12 h-12">
-              <div className="absolute inset-0 rounded-full border-2 border-indigo-100" />
-              <div className="absolute inset-0 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
-            </div>
-            <div className="text-center">
-              <p className="text-sm font-medium text-gray-900">
-                Generating artifact...
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                AI is creating your document
-              </p>
+          <div className="flex flex-col items-center justify-center flex-1 px-8">
+            <div className="w-full max-w-md rounded-2xl border border-edison-100 bg-gradient-to-br from-edison-50 via-white to-edison-blue-50 p-6 shadow-sm">
+              <div className="flex items-center justify-center mb-4">
+                <div className="relative w-16 h-16">
+                  <div className="absolute inset-0 rounded-full bg-edison-200/40 animate-ping" />
+                  <div className="absolute inset-1 rounded-full border-2 border-edison-200" />
+                  <div className="absolute inset-1 rounded-full border-2 border-edison-600 border-t-transparent animate-spin" />
+                  <div className="absolute inset-[18px] rounded-full bg-edison-600/90" />
+                </div>
+              </div>
+
+              <div className="text-center mb-5">
+                <p className="text-sm font-semibold text-gray-900">Building your artifact</p>
+                <p className="text-xs text-gray-600 mt-1">Generating structured content and validating sections</p>
+              </div>
+
+              <div className="flex items-center justify-center gap-1.5 mb-5" aria-label="Loading">
+                <span className="w-2 h-2 rounded-full bg-edison-500 animate-bounce [animation-delay:-0.2s]" />
+                <span className="w-2 h-2 rounded-full bg-edison-500 animate-bounce [animation-delay:-0.1s]" />
+                <span className="w-2 h-2 rounded-full bg-edison-500 animate-bounce" />
+              </div>
+
+              <div className="rounded-xl border border-edison-100 bg-white/90 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-edison-700 mb-2">Feature spotlight</p>
+                <ul className="space-y-1.5">
+                  {BUILD_FEATURE_ROTATION.map((feature, idx) => {
+                    const isActive = idx === activeFeatureIndex;
+                    return (
+                      <li
+                        key={feature}
+                        className={`text-xs transition-all duration-500 ${
+                          isActive
+                            ? "text-edison-900 font-medium opacity-100 translate-x-0"
+                            : "text-gray-500 opacity-60 translate-x-1"
+                        }`}
+                      >
+                        {isActive ? "-> " : "- "}
+                        {feature}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
             </div>
           </div>
         ) : artifact ? (
@@ -780,7 +831,7 @@ export function ArtifactSidePanel({
             <div className="flex-1 overflow-y-auto p-4">
               {loadingVersions ? (
                 <div className="flex items-center justify-center py-10">
-                  <div className="w-6 h-6 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+                  <div className="w-6 h-6 rounded-full border-2 border-edison-500 border-t-transparent animate-spin" />
                 </div>
               ) : versions.length === 0 ? (
                 <div className="text-center py-10">
@@ -790,10 +841,10 @@ export function ArtifactSidePanel({
               ) : (
                 <ol className="space-y-2">
                   {/* Current version at top */}
-                  <li className="flex items-center justify-between p-3 rounded-lg bg-indigo-50 border border-indigo-200">
+                  <li className="flex items-center justify-between p-3 rounded-lg bg-edison-50 border border-edison-200">
                     <div>
-                      <span className="text-xs font-semibold text-indigo-700">v{artifact.version}</span>
-                      <span className="ml-2 text-xs text-indigo-500">Current</span>
+                      <span className="text-xs font-semibold text-edison-700">v{artifact.version}</span>
+                      <span className="ml-2 text-xs text-edison-500">Current</span>
                     </div>
                   </li>
                   {versions.map((v) => {
@@ -803,7 +854,7 @@ export function ArtifactSidePanel({
                         key={v.id}
                         className={`rounded-lg border transition-colors ${
                           isSelected
-                            ? "border-indigo-300 bg-indigo-50"
+                            ? "border-edison-300 bg-edison-50"
                             : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                         }`}
                       >
@@ -839,9 +890,9 @@ export function ArtifactSidePanel({
 
                         {/* Expanded content */}
                         {isSelected && (
-                          <div className="border-t border-indigo-200">
+                          <div className="border-t border-edison-200">
                             <div
-                              className="prose prose-sm text-xs text-gray-700 leading-relaxed px-3 pt-3 pb-2 max-h-72 overflow-y-auto"
+                              className="prose prose-sm text-sm text-gray-700 leading-relaxed px-4 pt-4 pb-3 max-h-[34rem] overflow-y-auto"
                               dangerouslySetInnerHTML={{
                                 __html: /<[a-z][\s\S]*>/i.test(v.content)
                                   ? v.content
@@ -863,7 +914,7 @@ export function ArtifactSidePanel({
                                     setRestoringId(null);
                                   }
                                 }}
-                                className="text-xs font-medium text-indigo-600 hover:text-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="text-xs font-medium text-edison-600 hover:text-edison-800 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 {restoringId === v.id ? "Restoring…" : "Restore this version"}
                               </button>
@@ -880,12 +931,12 @@ export function ArtifactSidePanel({
             <div className="flex-1 overflow-y-auto p-4">
               {qualityLoading ? (
                 <div className="flex items-center justify-center py-10">
-                  <div className="w-6 h-6 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+                  <div className="w-6 h-6 rounded-full border-2 border-edison-500 border-t-transparent animate-spin" />
                 </div>
               ) : qualityData ? (
                 <div className="space-y-4">
                   {/* Overall score */}
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-indigo-50 border border-indigo-100">
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-edison-50 border border-edison-100">
                     <div>
                       <p className="text-xs text-gray-500">Overall Quality</p>
                       <p className="text-2xl font-bold text-gray-900">{qualityData.overallScore}</p>
@@ -958,7 +1009,7 @@ export function ArtifactSidePanel({
                       <ul className="space-y-1">
                         {qualityData.recommendations.slice(0, 8).map((r, i) => (
                           <li key={i} className="text-[11px] text-gray-600 flex items-start gap-1">
-                            <span className="text-indigo-400 shrink-0">&#10095;</span>
+                            <span className="text-edison-400 shrink-0">&#10095;</span>
                             <span>{r}</span>
                           </li>
                         ))}
@@ -972,7 +1023,7 @@ export function ArtifactSidePanel({
                   {/* Refresh button */}
                   <button
                     onClick={() => { setQualityData(null); fetchQuality(); }}
-                    className="w-full text-xs font-medium text-indigo-600 hover:text-indigo-800 py-2 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
+                    className="w-full text-xs font-medium text-edison-600 hover:text-edison-800 py-2 border border-edison-200 rounded-lg hover:bg-edison-50 transition-colors"
                   >
                     Re-analyze Quality
                   </button>
@@ -1014,7 +1065,7 @@ function renderPreview(text: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/```mermaid\n([\s\S]*?)```/g, (_m, code) => `<pre class="mermaid">${code.trim()}</pre>`)
+    .replace(/```\s*mermaid\s*\r?\n([\s\S]*?)```/gi, (_m, code) => `<pre class="mermaid">${code.trim()}</pre>`)
     .replace(/^### (.+)$/gm, "<h3>$1</h3>")
     .replace(/^## (.+)$/gm, "<h2>$1</h2>")
     .replace(/^# (.+)$/gm, "<h1>$1</h1>")

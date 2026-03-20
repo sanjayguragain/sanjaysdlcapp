@@ -97,7 +97,7 @@ export function NotificationBell() {
                   key={n.id}
                   href={`/projects/${n.projectId}/artifacts/${n.artifactId}`}
                   onClick={() => setShowNotifs(false)}
-                  className="flex items-start gap-3 px-5 py-4 hover:bg-indigo-50 transition-colors hover:border-l-4 hover:border-indigo-500 hover:pl-4"
+                  className="flex items-start gap-3 px-5 py-4 hover:bg-edison-50 transition-colors hover:border-l-4 hover:border-edison-500 hover:pl-4"
                 >
                   <div className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${n.isOverdue ? "bg-red-500" : "bg-amber-400"}`} />
                   <div className="flex-1 min-w-0">

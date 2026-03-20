@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { generateArtifact, TemplateValidationError } from "@/lib/ai";
+import { ensureAvdMermaidDiagrams } from "@/lib/ai";
 import { ArtifactType, ArtifactStatus, ARTIFACT_DEFINITIONS } from "@/types";
 import { getProjectPhase } from "@/lib/workflow";
 import { evaluateArtifactQuality } from "@/lib/artifactChecks";
@@ -58,7 +59,14 @@ export async function GET(
     return NextResponse.json({ error: "Artifact not found" }, { status: 404 });
   }
 
-  return NextResponse.json(artifact);
+  const content = artifact.type === "avd"
+    ? ensureAvdMermaidDiagrams(artifact.content)
+    : artifact.content;
+
+  return NextResponse.json({
+    ...artifact,
+    content,
+  });
 }
 
 export async function PUT(
@@ -103,10 +111,13 @@ export async function PUT(
     });
 
     const session = await getServerSession(authOptions);
-    const sessionUser = session?.user?.email
-      ? await prisma.user.findUnique({ where: { email: session.user.email }, select: { name: true } })
-      : null;
-    const authorName = sessionUser?.name ?? "Unknown";
+    const authorName =
+      session?.user?.name ??
+      session?.user?.email ??
+      (session?.user?.email
+        ? (await prisma.user.findUnique({ where: { email: session.user.email }, select: { name: true } }))?.name
+        : null) ??
+      "Unknown";
     const today = new Date().toISOString().slice(0, 10);
 
     let result;

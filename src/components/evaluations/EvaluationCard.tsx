@@ -27,7 +27,7 @@ export function EvaluationCard({ id, documentName, artifactType, overallScore, c
 
   return (
     <Link href={`/evaluations/${id}`}>
-      <div className="bg-white rounded-xl border border-gray-200 p-5 hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer">
+      <div className="bg-white rounded-xl border border-gray-200 p-5 hover:border-edison-300 hover:shadow-md transition-all cursor-pointer">
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
             <h3 className="text-sm font-semibold text-gray-900 truncate">{documentName}</h3>
@@ -42,7 +42,7 @@ export function EvaluationCard({ id, documentName, artifactType, overallScore, c
         </div>
         <div className="mt-3 flex items-center justify-between text-[11px] text-gray-400">
           <span>{new Date(createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
-          <span className="text-indigo-500 font-medium">View Report →</span>
+          <span className="text-edison-500 font-medium">View Report →</span>
         </div>
       </div>
     </Link>

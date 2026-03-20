@@ -1,5 +1,6 @@
 import { ArtifactType } from "@/types";
-import { buildArtifactPrompt, getPrdAgentRulesForChat, loadTemplate } from "./skillLoader";
+import { buildArtifactPrompt, buildChatSkillContext, getArtifactModel, getPrdAgentRulesForChat, loadTemplate } from "./skillLoader";
+import { isCopilotSdkEnabled, copilotSendAndWait, copilotStream } from "./copilot";
 
 // Loaded once at module initialisation — cached by skillLoader, so disk I/O is a one-time cost.
 const _PRD_AGENT_RULES = getPrdAgentRulesForChat();
@@ -76,7 +77,7 @@ function buildModelParams(opts: {
   return { temperature: opts.temperature, max_tokens: opts.maxTokens };
 }
 
-type ProviderKind = "azure" | "github" | "openai";
+type ProviderKind = "copilot" | "azure" | "github" | "openai";
 
 interface ProviderConfig {
   kind: ProviderKind;
@@ -88,6 +89,8 @@ interface ProviderConfig {
 }
 
 function getProviderConfigs(defaultGithubModel: string): ProviderConfig[] {
+  const copilotToken = process.env.GITHUB_COPILOT_TOKEN;
+  const copilotModel = process.env.COPILOT_MODEL || "gpt-5.2";
   const azureEndpoint = process.env.AZURE_OPENAI_ENDPOINT;
   const azureKey = process.env.AZURE_OPENAI_API_KEY;
   const azureDeployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
@@ -97,6 +100,19 @@ function getProviderConfigs(defaultGithubModel: string): ProviderConfig[] {
   const openaiKey = process.env.OPENAI_API_KEY;
 
   const providers: ProviderConfig[] = [];
+
+  // GitHub Copilot (preferred — uses Copilot license, no per-token cost)
+  // Skip when the token is a PAT (ghp_) or OAuth (gho_) — api.githubcopilot.com
+  // only accepts Copilot integration tokens, not standard GitHub auth tokens.
+  if (copilotToken && !copilotToken.startsWith("ghp_") && !copilotToken.startsWith("gho_")) {
+    providers.push({
+      kind: "copilot",
+      url: "https://api.githubcopilot.com/chat/completions",
+      headers: { Authorization: `Bearer ${copilotToken}` },
+      model: copilotModel,
+      useAzure: false,
+    });
+  }
 
   if (azureEndpoint && azureKey && azureDeployment) {
     const base = azureEndpoint.replace(/\/$/, "");
@@ -120,12 +136,12 @@ function getProviderConfigs(defaultGithubModel: string): ProviderConfig[] {
     });
 
     // Safe fallback for invalid/unsupported configured GitHub model names.
-    if (githubModel !== "gpt-4o") {
+    if (githubModel !== "gpt-5.2") {
       providers.push({
         kind: "github",
         url: "https://models.inference.ai.azure.com/chat/completions",
         headers: { Authorization: `Bearer ${githubToken}` },
-        model: "gpt-4o",
+        model: "gpt-5.2",
         useAzure: false,
       });
     }
@@ -136,7 +152,7 @@ function getProviderConfigs(defaultGithubModel: string): ProviderConfig[] {
       kind: "openai",
       url: "https://api.openai.com/v1/chat/completions",
       headers: { Authorization: `Bearer ${openaiKey}` },
-      model: "gpt-4o",
+      model: "gpt-5.2",
       useAzure: false,
     });
   }
@@ -154,6 +170,9 @@ Your role:
 - Maintain traceability between artifacts
 
 When generating artifacts, use clear headings, structured sections, and professional enterprise language. Be thorough but concise.
+
+CRITICAL — Output Size:
+NEVER claim the output is "too large" or "exceeds token limits". NEVER offer to split into multiple parts or ask the user to choose between options about output size. Always produce the FULL document in a single response. If the content is extensive, write it all — do not truncate or refuse.
 
 IMPORTANT — Artifact updates:
 When the user asks you to modify, update, add to, or change an artifact that is currently open, you MUST:
@@ -251,16 +270,82 @@ export interface FeedbackSyncSource {
   content: string;
 }
 
+export function ensureAvdMermaidDiagrams(content: string): string {
+  const hasMermaid = /<pre\b[^>]*class=["'][^"']*\bmermaid\b[^"']*["'][^>]*>[\s\S]*?<\/pre>|```\s*mermaid\b/i.test(content);
+  if (hasMermaid) return content;
+
+  const isHtml = /<\s*[a-z][\s\S]*>/i.test(content);
+  if (isHtml) {
+    return `${content}
+<h2>System Context Diagram</h2>
+<p>This baseline diagram is auto-inserted when a generated AVD does not include Mermaid. Replace nodes/edges with project-specific systems as needed.</p>
+<pre class="mermaid">graph TD
+  User[Business User] --> App[Target Solution]
+  App --> IdP[Identity Provider]
+  App --> Core[(Core Platform)]
+  App --> Ext[External Service]
+</pre>
+<h2>Integration / Deployment Diagram</h2>
+<pre class="mermaid">graph LR
+  UI[Web UI] --> API[Application API]
+  API --> DB[(Primary DB)]
+  API --> MQ[Message Queue]
+  API --> Obs[Monitoring]
+</pre>`;
+  }
+
+  return `${content}
+
+## System Context Diagram
+
+\`\`\`mermaid
+graph TD
+  User[Business User] --> App[Target Solution]
+  App --> IdP[Identity Provider]
+  App --> Core[(Core Platform)]
+  App --> Ext[External Service]
+\`\`\`
+
+## Integration / Deployment Diagram
+
+\`\`\`mermaid
+graph LR
+  UI[Web UI] --> API[Application API]
+  API --> DB[(Primary DB)]
+  API --> MQ[Message Queue]
+  API --> Obs[Monitoring]
+\`\`\``;
+}
+
 /** Returns a streaming Response body from the AI provider (raw SSE from OpenAI format). */
 export async function streamChatResponse(
   messages: { role: string; content: string }[],
-  projectContext?: string
+  projectContext?: string,
+  artifactType?: string
 ): Promise<ReadableStream<Uint8Array> | null> {
+  const skillContext = artifactType ? buildChatSkillContext(artifactType) : "";
+
+  // ── Copilot SDK path (preferred) ──────────────────────────────────────────
+  if (isCopilotSdkEnabled()) {
+    try {
+      let systemPrompt = SYSTEM_PROMPT + skillContext;
+      if (projectContext) systemPrompt += `\n\nProject Context:\n${projectContext}`;
+      const userPrompt = messages
+        .filter((m) => m.role === "user")
+        .map((m) => m.content)
+        .join("\n\n");
+      return await copilotStream({ systemPrompt, userPrompt, model: artifactType ? getArtifactModel(artifactType) : undefined });
+    } catch (err) {
+      console.error("[ai][stream] Copilot SDK failed, falling back to REST:", err);
+    }
+  }
+
+  // ── REST fallback ────────────────────────────────────────────────────────
   const providers = getProviderConfigs("gpt-5.2");
   if (providers.length === 0) return null;
 
   const systemMessages = [
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: SYSTEM_PROMPT + skillContext },
     ...(projectContext
       ? [{ role: "system", content: `Project Context:\n${projectContext}` }]
       : []),
@@ -277,7 +362,7 @@ export async function streamChatResponse(
           useAzure: provider.useAzure,
           azureDeployment: provider.azureDeployment,
           temperature: 0.7,
-          maxTokens: 16000,
+          maxTokens: 32000,
         }),
         stream: true,
       }),
@@ -294,19 +379,39 @@ export async function streamChatResponse(
 
 export async function generateChatResponse(
   messages: { role: string; content: string }[],
-  projectContext?: string
+  projectContext?: string,
+  artifactType?: string
 ): Promise<ChatResponse> {
+  const skillContext = artifactType ? buildChatSkillContext(artifactType) : "";
+
+  // ── Copilot SDK path (preferred) ──────────────────────────────────────────
+  if (isCopilotSdkEnabled()) {
+    try {
+      let systemPrompt = SYSTEM_PROMPT + skillContext;
+      if (projectContext) systemPrompt += `\n\nProject Context:\n${projectContext}`;
+      const userPrompt = messages
+        .filter((m) => m.role === "user")
+        .map((m) => m.content)
+        .join("\n\n");
+      const content = await copilotSendAndWait({ systemPrompt, userPrompt, model: artifactType ? getArtifactModel(artifactType) : undefined });
+      return { content };
+    } catch (err) {
+      console.error("[ai] Copilot SDK failed, falling back to REST:", err);
+    }
+  }
+
+  // ── REST fallback ────────────────────────────────────────────────────────
   const providers = getProviderConfigs("gpt-5.2");
 
   if (providers.length === 0) {
     return {
       content:
-        "I can't reach an AI provider right now. Please configure at least one of AZURE_OPENAI_*, GITHUB_TOKEN, or OPENAI_API_KEY and restart the dev server.",
+        "I can't reach an AI provider right now. Please configure at least one of GITHUB_COPILOT_TOKEN, AZURE_OPENAI_*, GITHUB_TOKEN, or OPENAI_API_KEY and restart the dev server.",
     };
   }
 
   const systemMessages = [
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: SYSTEM_PROMPT + skillContext },
     ...(projectContext
       ? [{ role: "system", content: `Project Context:\n${projectContext}` }]
       : []),
@@ -326,7 +431,7 @@ export async function generateChatResponse(
           useAzure: provider.useAzure,
           azureDeployment: provider.azureDeployment,
           temperature: 0.7,
-          maxTokens: 16000,
+          maxTokens: 32000,
         }),
       }),
     });
@@ -342,7 +447,7 @@ export async function generateChatResponse(
 
   return {
     content:
-      "I couldn't reach any configured AI provider (Azure/GitHub/OpenAI). Please verify the configured API keys/deployment and restart the dev server.",
+      "I couldn't reach any configured AI provider (Copilot/Azure/GitHub/OpenAI). Please verify the configured API keys/deployment and restart the dev server.",
   };
 }
 
@@ -351,12 +456,7 @@ export async function generateChatResponse(
  * The chat SYSTEM_PROMPT instructs the model to ask clarifying questions, which
  * must never happen here. This function always produces a complete HTML document.
  */
-async function callArtifactDirectly(userPrompt: string): Promise<string> {
-  const providers = getProviderConfigs("gpt-5.2");
-  if (providers.length === 0) {
-    throw new Error("No AI provider configured");
-  }
-
+async function callArtifactDirectly(userPrompt: string, preferredModel?: string): Promise<string> {
   const artifactSystemPrompt = `You are an expert SDLC documentation specialist producing enterprise-grade HTML documents.
 
 STRICT RULES — follow these without exception:
@@ -365,7 +465,86 @@ STRICT RULES — follow these without exception:
 3. Where project-specific information is unavailable, write a clearly marked inline placeholder: <em class="missing">[To be confirmed — <short explanation of what is needed>]</em>
 4. Output ONLY the HTML document body content — no markdown, no preamble, no code fences, no delimiters.
 5. The more unknowns you fill with [To be confirmed] placeholders, the lower the reader's confidence in the document, so be explicit about gaps.
-6. If there are 3 or more significant unknowns, append a final <h2>Open Questions</h2> section listing each outstanding item as a numbered <ol><li> — this makes gaps visible at a glance and is required for the document to be approved.`;
+6. If there are 3 or more significant unknowns, append a final <h2>Open Questions</h2> section listing each outstanding item as a numbered <ol><li> — this makes gaps visible at a glance and is required for the document to be approved.
+7. NEVER claim the output is "too large", "exceeds token limits", or offer to split into multiple parts. You MUST produce the full document in a single response regardless of length. Do NOT output meta-commentary about response size. Just write the complete document.`;
+
+  // ── Race: Copilot SDK vs Azure OpenAI (first wins) ───────────────────────
+  // This avoids waiting for a 30s SDK timeout before Azure gets a chance.
+  // Both are fired simultaneously; the loser is silently abandoned.
+  const azureProviders = getProviderConfigs(preferredModel || "gpt-5.2");
+  const azureProvider = azureProviders.find((p) => p.kind === "azure");
+
+  const makeAzureCall = azureProvider
+    ? fetch(azureProvider.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...azureProvider.headers },
+        body: JSON.stringify({
+          ...(azureProvider.model ? { model: azureProvider.model } : {}),
+          messages: [
+            { role: "system", content: artifactSystemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          ...buildModelParams({
+            useAzure: azureProvider.useAzure,
+            azureDeployment: azureProvider.azureDeployment,
+            temperature: 0.3,
+            maxTokens: 32000,
+          }),
+        }),
+      }).then(async (res) => {
+        if (!res.ok) throw new Error(`Azure ${res.status}`);
+        const data = await res.json();
+        const text = (data.choices[0].message.content as string) ?? "";
+        if (!text) throw new Error("Azure returned empty content");
+        return text;
+      })
+    : null;
+
+  if (isCopilotSdkEnabled() && makeAzureCall) {
+    // Fire both simultaneously — first non-error response wins
+    const sdkCall = copilotSendAndWait({
+      systemPrompt: artifactSystemPrompt,
+      userPrompt,
+      model: preferredModel,
+    }).then((content) => {
+      if (!content) throw new Error("SDK returned empty content");
+      return content;
+    });
+
+    try {
+      const result = await Promise.any([sdkCall, makeAzureCall]);
+      console.log("[artifact] Race won — returning result");
+      return result;
+    } catch {
+      console.error("[artifact] Both SDK and Azure failed in race, trying remaining providers");
+    }
+  } else if (isCopilotSdkEnabled()) {
+    // No Azure configured — SDK only
+    try {
+      const content = await copilotSendAndWait({
+        systemPrompt: artifactSystemPrompt,
+        userPrompt,
+        model: preferredModel,
+      });
+      if (content) return content;
+    } catch (err) {
+      console.error("[artifact] Copilot SDK failed, falling back to REST:", err);
+    }
+  } else if (makeAzureCall) {
+    // Azure only (SDK disabled)
+    try {
+      const content = await makeAzureCall;
+      if (content) return content;
+    } catch (err) {
+      console.error("[artifact] Azure call failed:", err);
+    }
+  }
+
+  // ── REST fallback (GitHub Models / OpenAI) ────────────────────────────────
+  const providers = azureProviders.filter((p) => p.kind !== "azure");
+  if (providers.length === 0) {
+    throw new Error("No AI provider configured");
+  }
 
   let lastError = "";
   for (const provider of providers) {
@@ -382,7 +561,7 @@ STRICT RULES — follow these without exception:
           useAzure: provider.useAzure,
           azureDeployment: provider.azureDeployment,
           temperature: 0.3,
-          maxTokens: 16000,
+          maxTokens: 32000,
         }),
       }),
     });
@@ -697,8 +876,8 @@ Output ONLY the full updated HTML PRD body.`;
  * 2) deterministic coverage check
  * 3) targeted expansion pass if gates are not met
  */
-async function generatePrdWithQualityGates(userPrompt: string, projectContext: string): Promise<string> {
-  let current = await callArtifactDirectly(userPrompt);
+async function generatePrdWithQualityGates(userPrompt: string, projectContext: string, preferredModel?: string): Promise<string> {
+  let current = await callArtifactDirectly(userPrompt, preferredModel);
 
   // Run up to two expansion passes to satisfy quantity/quality gates.
   for (let i = 0; i < 2; i++) {
@@ -710,7 +889,7 @@ async function generatePrdWithQualityGates(userPrompt: string, projectContext: s
       draftHtml: current,
       coverage,
     });
-    current = await callArtifactDirectly(expandPrompt);
+    current = await callArtifactDirectly(expandPrompt, preferredModel);
   }
 
   const templateValidation = validatePrdTemplateCompliance(current);
@@ -720,7 +899,7 @@ async function generatePrdWithQualityGates(userPrompt: string, projectContext: s
       draftHtml: current,
       missingHeadings: templateValidation.missingHeadings,
     });
-    current = await callArtifactDirectly(repairPrompt);
+    current = await callArtifactDirectly(repairPrompt, preferredModel);
   }
 
   const finalTemplateValidation = validatePrdTemplateCompliance(current);
@@ -744,6 +923,8 @@ export async function generateArtifact(
   const prompt = buildArtifactPrompt(type, meta);
 
   const hasProvider =
+    isCopilotSdkEnabled() ||
+    !!process.env.GITHUB_COPILOT_TOKEN ||
     !!(process.env.AZURE_OPENAI_ENDPOINT && process.env.AZURE_OPENAI_API_KEY) ||
     !!process.env.GITHUB_TOKEN ||
     !!process.env.OPENAI_API_KEY;
@@ -754,14 +935,18 @@ export async function generateArtifact(
   
   }
 
+  // Resolve preferred model from skill frontmatter (undefined = use provider default)
+  const preferredModel = getArtifactModel(type);
+
   const userPrompt = `${prompt}\n\nProject Context:\n${projectContext}${
     additionalContext ? `\n\nAdditional Context:\n${additionalContext}` : ""
   }`;
 
   try {
-    const content = type === "prd"
-      ? await generatePrdWithQualityGates(userPrompt, projectContext)
-      : await callArtifactDirectly(userPrompt);
+    const rawContent = type === "prd"
+      ? await generatePrdWithQualityGates(userPrompt, projectContext, preferredModel)
+      : await callArtifactDirectly(userPrompt, preferredModel);
+    const content = type === "avd" ? ensureAvdMermaidDiagrams(rawContent) : rawContent;
     return {
       content,
       metadata: {
@@ -835,7 +1020,8 @@ UPDATE INSTRUCTIONS (MANDATORY):
 6. Return ONLY the complete updated HTML document body.
 `;
 
-  const content = await callArtifactDirectly(refinementPrompt);
+  const rawContent = await callArtifactDirectly(refinementPrompt);
+  const content = params.artifactType === "avd" ? ensureAvdMermaidDiagrams(rawContent) : rawContent;
   return {
     content,
     metadata: {

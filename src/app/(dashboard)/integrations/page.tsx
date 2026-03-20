@@ -58,7 +58,7 @@ const INTEGRATIONS: Integration[] = [
     category: "Notifications",
     status: "available",
     icon: (
-      <svg viewBox="0 0 24 24" className="w-6 h-6 fill-current text-indigo-600">
+      <svg viewBox="0 0 24 24" className="w-6 h-6 fill-current text-edison-600">
         <path d="M20.625 0H14.04L5.67 8.685.135 17.932 3.82 24H9.31l3.73-6.525 7.055 6.525H24V0h-3.375zM14.625 15.75a3.375 3.375 0 110-6.75 3.375 3.375 0 010 6.75zm6-4.5h-.75v-2.625a2.625 2.625 0 10-5.25 0V11.25h-.75a.75.75 0 00-.75.75v3a.75.75 0 00.75.75h6.75a.75.75 0 00.75-.75v-3a.75.75 0 00-.75-.75z" />
       </svg>
     ),
@@ -138,7 +138,7 @@ export default function IntegrationsPage() {
     <div className="p-8">
       <Header
         title="Integrations"
-        subtitle="Connect SDLC Platform with your enterprise toolchain"
+        subtitle="Connect SDLC Hub with your enterprise toolchain"
       />
 
       <div className="mt-6 space-y-8">
@@ -203,7 +203,7 @@ export default function IntegrationsPage() {
                                 handleFieldChange(integration.id, field.label, e.target.value)
                               }
                               placeholder={field.placeholder}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-edison-500 bg-white"
                             />
                           </div>
                         ))}

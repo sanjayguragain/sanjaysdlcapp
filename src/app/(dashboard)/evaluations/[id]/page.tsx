@@ -64,7 +64,7 @@ export default function EvaluationDetailPage() {
     return (
       <div className="p-8 text-center">
         <p className="text-gray-500">Evaluation not found</p>
-        <Link href="/evaluations" className="text-indigo-600 text-sm mt-2 inline-block">← Back to evaluations</Link>
+        <Link href="/evaluations" className="text-edison-600 text-sm mt-2 inline-block">← Back to evaluations</Link>
       </div>
     );
   }
@@ -84,7 +84,7 @@ export default function EvaluationDetailPage() {
   return (
     <div className="p-8 max-w-5xl mx-auto">
       <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
-        <Link href="/evaluations" className="hover:text-indigo-600">Evaluations</Link>
+        <Link href="/evaluations" className="hover:text-edison-600">Evaluations</Link>
         <span>/</span>
         <span className="text-gray-900">Report</span>
       </div>

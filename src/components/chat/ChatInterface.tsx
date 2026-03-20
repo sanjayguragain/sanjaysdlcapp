@@ -76,7 +76,7 @@ function sanitizeAssistantForChat(content: string): string {
     const post = endIdx !== -1
       ? cleaned.slice(endIdx + ARTIFACT_DELIM_END.length).replace(/^\s*-{3,}\s*/, "").trim()
       : "";
-    return [pre, post].filter(Boolean).join("\n\n") || "The document has been updated in the editor.";
+    return [pre, post].filter(Boolean).join("\n\n");
   }
 
   // Backward-compat safety: old messages may contain full HTML artifact bodies without delimiters.
@@ -137,18 +137,18 @@ export function ChatInterface({
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
+    <div className="flex flex-col h-full bg-white overflow-hidden">
       {/* Chat header */}
       <div className="px-6 py-4 bg-white border-b border-gray-200 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-edison-blue-500 to-edison-600 flex items-center justify-center">
             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
             </svg>
           </div>
           <div>
             <h3 className="font-semibold text-gray-900 text-sm">
-              SDLC AI Assistant
+              Edison AI Assistant
             </h3>
             <p className="text-xs text-gray-500">
               {sdlcMode === "traditional"
@@ -173,8 +173,8 @@ export function ChatInterface({
           title="Upload supporting documents"
           className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors mr-2 ${
             showDocPanel
-              ? "bg-indigo-50 border-indigo-200 text-indigo-700"
-              : "bg-white border-gray-200 text-gray-600 hover:border-indigo-300 hover:text-indigo-600"
+              ? "bg-edison-50 border-edison-200 text-edison-700"
+              : "bg-white border-gray-200 text-gray-600 hover:border-edison-300 hover:text-edison-600"
           }`}
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -183,7 +183,7 @@ export function ChatInterface({
           </svg>
           Docs
           {documents.length > 0 && (
-            <span className="ml-0.5 bg-indigo-600 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+            <span className="ml-0.5 bg-edison-600 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
               {documents.length}
             </span>
           )}
@@ -251,16 +251,16 @@ export function ChatInterface({
       )}
 
       {/* Messages */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4 scroll-pb-4">
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center py-12">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center mb-4">
+          <div className="flex flex-col items-center justify-center h-full text-center py-4">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-edison-blue-500 to-edison-600 flex items-center justify-center mb-4">
               <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
               </svg>
             </div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              SDLC AI Assistant
+              Edison AI Assistant
             </h3>
             <p className="text-sm text-gray-500 max-w-md mb-6">
               I can help you generate product documentation artifacts, analyze
@@ -271,7 +271,7 @@ export function ChatInterface({
                 <button
                   key={action.type}
                   onClick={() => onGenerateArtifact(action.type)}
-                  className="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm text-gray-700 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
+                  className="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm text-gray-700 hover:border-edison-300 hover:text-edison-600 transition-colors"
                 >
                   {action.label}
                 </button>
@@ -285,6 +285,7 @@ export function ChatInterface({
           const safeContent = msg.role === "assistant"
             ? sanitizeAssistantForChat(msg.content)
             : msg.content;
+          if (msg.role === "assistant" && !safeContent.trim()) return null;
           return (
             <MessageBubble
               key={msg.id}
@@ -299,7 +300,7 @@ export function ChatInterface({
 
         {isLoading && (
           <div className="flex gap-3">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-edison-blue-500 to-edison-600 flex items-center justify-center shrink-0">
               <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
               </svg>
@@ -314,7 +315,7 @@ export function ChatInterface({
           </div>
         )}
 
-        <div ref={messagesEndRef} />
+        <div ref={messagesEndRef} className="h-2 shrink-0" />
       </div>
 
       {/* Input */}
@@ -330,7 +331,7 @@ export function ChatInterface({
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Describe your project, ask questions, or request an artifact..."
-              className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3.5 text-sm leading-5 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent max-h-32 overflow-y-auto"
+              className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3.5 text-sm leading-5 focus:outline-none focus:ring-2 focus:ring-edison-500 focus:border-transparent max-h-32 overflow-y-auto"
               rows={2}
               style={{
                 height: "auto",

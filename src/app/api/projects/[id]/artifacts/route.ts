@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { generateArtifact, TemplateValidationError } from "@/lib/ai";
+import { ensureAvdMermaidDiagrams } from "@/lib/ai";
 import { ARTIFACT_DEFINITIONS, ArtifactType, ArtifactStatus } from "@/types";
 import { getProjectPhase } from "@/lib/workflow";
 import { evaluateArtifactQuality } from "@/lib/artifactChecks";
@@ -69,7 +70,13 @@ export async function GET(
     orderBy: { createdAt: "asc" },
   });
 
-  return NextResponse.json({ artifacts });
+  const normalized = artifacts.map((a) =>
+    a.type === "avd"
+      ? { ...a, content: ensureAvdMermaidDiagrams(a.content) }
+      : a
+  );
+
+  return NextResponse.json({ artifacts: normalized });
 }
 
 export async function POST(
@@ -111,8 +118,9 @@ export async function POST(
     return NextResponse.json({ error: "Unknown artifact type" }, { status: 400 });
   }
 
-  // Resolve the logged-in user (from session, else DB fallback)
+  // Resolve the logged-in user — prefer session name (GitHub OAuth provides it directly)
   const session = await getServerSession(authOptions);
+  const sessionName = session?.user?.name ?? session?.user?.email ?? null;
   let user = session?.user?.email
     ? await prisma.user.findUnique({ where: { email: session.user.email } })
     : null;
@@ -121,6 +129,8 @@ export async function POST(
       data: { name: "Default User", email: "user@example.com", role: "product_manager" },
     });
   }
+  const authorName = sessionName ?? user.name ?? "Unknown";
+  const today = new Date().toISOString().slice(0, 10);
 
   // Gather context
   const existingArtifacts = project.artifacts.map((a: { type: string; content: string }) => ({
@@ -137,8 +147,6 @@ export async function POST(
     artifactsHeading: "Existing Artifacts",
   });
 
-  const today = new Date().toISOString().slice(0, 10);
-
   // Generate content
   let result;
   try {
@@ -146,7 +154,7 @@ export async function POST(
       type as ArtifactType,
       projectContext,
       undefined,
-      { authorName: user.name, createdDate: today, isUpdate: false }
+      { authorName, createdDate: today, isUpdate: false }
     );
   } catch (error) {
     if (error instanceof TemplateValidationError) {

@@ -162,7 +162,7 @@ export default function ProjectDetailPage() {
         <h2 className="text-xl font-semibold text-gray-900 mb-2">
           Project not found
         </h2>
-        <Link href="/projects" className="text-indigo-600 hover:text-indigo-700">
+        <Link href="/projects" className="text-edison-600 hover:text-edison-700">
           Back to projects
         </Link>
       </div>
@@ -242,7 +242,7 @@ export default function ProjectDetailPage() {
         title={project.name}
         actions={
           <div className="flex items-center gap-2">
-            <Badge className="bg-indigo-100 text-indigo-700">
+            <Badge className="bg-edison-100 text-edison-700">
               {project.phase.replace(/_/g, " ")}
             </Badge>
             <Badge className={project.sdlcMode === "traditional" ? "bg-teal-100 text-teal-700" : "bg-slate-100 text-slate-700"}>
@@ -301,7 +301,7 @@ export default function ProjectDetailPage() {
             {isLongDesc && (
               <button
                 onClick={() => setDescExpanded((v) => !v)}
-                className="shrink-0 text-xs font-medium text-indigo-600 hover:text-indigo-800 whitespace-nowrap mt-0.5 transition-colors"
+                className="shrink-0 text-xs font-medium text-edison-600 hover:text-edison-800 whitespace-nowrap mt-0.5 transition-colors"
               >
                 {descExpanded ? "Show less" : "Show more"}
               </button>

@@ -101,12 +101,12 @@ export default function NewProjectPage() {
         link: "text-teal-700 hover:text-teal-900",
       }
     : {
-        accentText: "text-indigo-600",
-        accentBg: "bg-indigo-600",
-        accentBgLight: "bg-indigo-50",
-        accentBorder: "border-indigo-200",
-        focusRing: "focus:ring-indigo-500",
-        link: "text-indigo-600 hover:text-indigo-800",
+        accentText: "text-edison-600",
+        accentBg: "bg-edison-600",
+        accentBgLight: "bg-edison-50",
+        accentBorder: "border-edison-200",
+        focusRing: "focus:ring-edison-500",
+        link: "text-edison-600 hover:text-edison-800",
       };
 
   const traditionalDocs = [
@@ -266,7 +266,7 @@ export default function NewProjectPage() {
             </div>
 
             {sdlcMode === "modern" ? (
-              <div className="bg-indigo-50 border border-indigo-100 rounded-lg px-4 py-3 text-sm text-indigo-700">
+              <div className="bg-edison-50 border border-edison-100 rounded-lg px-4 py-3 text-sm text-edison-700">
                 <strong>Tip:</strong> Meeting notes, stakeholder emails, existing specs, and user research documents all make PRDs and risk analyses significantly better.
               </div>
             ) : (

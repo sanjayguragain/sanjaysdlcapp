@@ -35,6 +35,15 @@ const navItems = [
     ),
   },
   {
+    label: "Estimation",
+    href: "/estimation",
+    icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-2.761 0-5 2.239-5 5m5-5a5 5 0 015 5m-5-5V4m0 14v2m-7-7H3m18 0h-2m-1.414 5.586l-1.414-1.414M7.828 7.828L6.414 6.414" />
+      </svg>
+    ),
+  },
+  {
     label: "Integrations",
     href: "/integrations",
     icon: (
@@ -77,7 +86,7 @@ export function Sidebar() {
   }, [isCollapsed]);
 
   return (
-    <aside className={`fixed left-0 top-16 h-[calc(100dvh-4rem)] bg-gray-900 text-gray-300 flex flex-col z-40 transition-all duration-200 ${
+    <aside className={`fixed left-0 top-16 h-[calc(100dvh-4rem)] bg-[#101820] text-[#B1B3B3] flex flex-col z-40 transition-all duration-200 ${
       isCollapsed ? 'w-20' : 'w-64'
     }`}>
       {/* Collapse toggle */}
@@ -127,7 +136,7 @@ export function Sidebar() {
                 isCollapsed ? 'justify-center px-2' : 'gap-3 px-3'
               } py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 isActive
-                  ? "bg-indigo-600/20 text-indigo-400"
+                  ? "bg-edison-600/20 text-edison-400"
                   : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"
               }`}
             >

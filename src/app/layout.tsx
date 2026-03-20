@@ -3,8 +3,8 @@ import "./globals.css";
 import { SessionProviderWrapper } from "@/components/auth/SessionProviderWrapper";
 
 export const metadata: Metadata = {
-  title: "SDLC Platform - AI-Driven Product Documentation",
-  description: "AI-powered enterprise SDLC documentation platform",
+  title: "SDLC Hub",
+  description: "AI-powered enterprise SDLC documentation hub",
 };
 
 export default function RootLayout({

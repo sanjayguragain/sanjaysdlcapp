@@ -1,19 +1,61 @@
 import { NextAuthOptions } from "next-auth";
 import GitHubProvider from "next-auth/providers/github";
+import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/lib/db";
 
-export const authOptions: NextAuthOptions = {
-  providers: [
+const githubClientId = process.env.GITHUB_CLIENT_ID;
+const githubClientSecret = process.env.GITHUB_CLIENT_SECRET;
+const enableDevLogin =
+  process.env.NODE_ENV !== "production" && process.env.ENABLE_DEV_LOGIN === "true";
+
+const providers: NextAuthOptions["providers"] = [];
+
+if (githubClientId && githubClientSecret) {
+  providers.push(
     GitHubProvider({
-      clientId: process.env.GITHUB_CLIENT_ID!,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+      clientId: githubClientId,
+      clientSecret: githubClientSecret,
       authorization: {
         params: {
           scope: "read:user user:email repo",
         },
       },
-    }),
-  ],
+    })
+  );
+}
+
+if (enableDevLogin) {
+  providers.push(
+    CredentialsProvider({
+      id: "dev-login",
+      name: "Dev Login",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        name: { label: "Name", type: "text" },
+      },
+      async authorize(credentials) {
+        const email =
+          credentials?.email?.trim() ||
+          process.env.DEV_LOGIN_EMAIL ||
+          "developer@local.dev";
+        const name =
+          credentials?.name?.trim() ||
+          process.env.DEV_LOGIN_NAME ||
+          "Local Developer";
+
+        return {
+          id: email,
+          email,
+          name,
+          image: null,
+        };
+      },
+    })
+  );
+}
+
+export const authOptions: NextAuthOptions = {
+  providers,
 
   session: {
     strategy: "jwt",

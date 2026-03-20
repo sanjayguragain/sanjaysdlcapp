@@ -94,7 +94,7 @@ function ToolbarButton({
       title={title}
       className={`p-1.5 rounded-md transition-colors ${
         isActive
-          ? "bg-indigo-100 text-indigo-700"
+          ? "bg-edison-100 text-edison-700"
           : "text-gray-500 hover:bg-gray-100 hover:text-gray-700"
       }`}
     >
@@ -219,7 +219,7 @@ export function ArtifactEditor({ content, onChange, editable = true }: ArtifactE
             if (val === "p") editor.chain().focus().setParagraph().run();
             else setHeading(Number(val.replace("h", "")) as 1 | 2 | 3);
           }}
-          className="text-xs border border-gray-200 rounded-md px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 mr-1"
+          className="text-xs border border-gray-200 rounded-md px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-edison-500 mr-1"
         >
           <option value="p">Paragraph</option>
           <option value="h1">Heading 1</option>

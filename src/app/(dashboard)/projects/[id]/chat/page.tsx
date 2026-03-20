@@ -47,7 +47,7 @@ const TRADITIONAL_DOC_PROMPTS: Record<string, { label: string; prompt: string }>
   },
   avd: {
     label: "AVD",
-    prompt: "Create an Architecture Vision Document (AVD) for this project. Include architectural principles, high-level target architecture, constraints, key integration points, technology choices, and architecture decisions with rationale.",
+    prompt: "Create an Architecture Vision Document (AVD) for this project. Include architectural principles, high-level target architecture, constraints, key integration points, technology choices, and architecture decisions with rationale. Include a dedicated System Context Diagram section and at least one Integration or Deployment diagram using Mermaid. Use renderable Mermaid format exactly as either <pre class=\"mermaid\">graph TD ...</pre> or fenced code block with ```mermaid.",
   },
   srs: {
     label: "SRS",
@@ -1007,7 +1007,7 @@ export default function ProjectChatPage() {
         </div>
         <Link
           href={`/projects/${projectId}`}
-          className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
+          className="text-sm text-edison-600 hover:text-edison-700 font-medium"
         >
           View Project →
         </Link>
@@ -1021,7 +1021,7 @@ export default function ProjectChatPage() {
             showSidePanel ? "w-2/5 min-w-[360px]" : "w-full"
           }`}
         >
-          <div className="flex-1 p-4 overflow-hidden">
+          <div className="flex-1 overflow-hidden">
             <ChatInterface
               projectId={projectId}
               messages={messages}

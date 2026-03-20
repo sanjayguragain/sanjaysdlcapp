@@ -62,8 +62,8 @@ export default function EvalAnalyticsPage() {
 
       {/* KPI row */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mt-6 mb-8">
-        <MetricCard label="Total Evaluations" value={total} color="bg-violet-50 text-violet-600" />
-        <MetricCard label="Avg Score" value={avgScore.toFixed(1)} color="bg-indigo-50 text-indigo-600" />
+        <MetricCard label="Total Evaluations" value={total} color="bg-edison-blue-50 text-edison-blue-600" />
+        <MetricCard label="Avg Score" value={avgScore.toFixed(1)} color="bg-edison-50 text-edison-600" />
         <MetricCard label="Excellent" value={distribution.excellent} color="bg-emerald-50 text-emerald-600" />
         <MetricCard label="Good" value={distribution.good} color="bg-blue-50 text-blue-600" />
         <MetricCard label="Needs Work" value={distribution.needsImprovement + distribution.reworkRequired} color="bg-amber-50 text-amber-600" />
@@ -114,7 +114,7 @@ export default function EvalAnalyticsPage() {
                 </div>
                 <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-indigo-500 rounded-full transition-all duration-500"
+                    className="h-full bg-edison-500 rounded-full transition-all duration-500"
                     style={{ width: `${(d.count / maxDocCount) * 100}%` }}
                   />
                 </div>

@@ -19,7 +19,7 @@ export const PERSONAS: Persona[] = [
     role: "Product Manager",
     email: "alex@company.com",
     initials: "AC",
-    color: "bg-indigo-600",
+    color: "bg-edison-600",
   },
   {
     id: "sec",

@@ -1,19 +1,46 @@
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap');
 @import "tailwindcss";
+
+@theme {
+  /* Edison Brand — Orange primary scale */
+  --color-edison-50: #fef5ee;
+  --color-edison-100: #fde8d4;
+  --color-edison-200: #fccda8;
+  --color-edison-300: #f9aa71;
+  --color-edison-400: #f58138;
+  --color-edison-500: #e87722;
+  --color-edison-600: #d46515;
+  --color-edison-700: #b04d13;
+  --color-edison-800: #8d3e17;
+  --color-edison-900: #733516;
+
+  /* Edison Brand — Blue secondary scale */
+  --color-edison-blue-50: #eef9ff;
+  --color-edison-blue-100: #d9f2ff;
+  --color-edison-blue-200: #bce8ff;
+  --color-edison-blue-300: #8edcff;
+  --color-edison-blue-400: #4ec6f7;
+  --color-edison-blue-500: #00a9e0;
+  --color-edison-blue-600: #0090c4;
+  --color-edison-blue-700: #00739e;
+  --color-edison-blue-800: #066082;
+  --color-edison-blue-900: #0b506c;
+}
 
 :root {
   --background: #ffffff;
-  --foreground: #0a0a0a;
-  --sidebar-bg: #111827;
-  --sidebar-text: #e5e7eb;
-  --primary: #6366f1;
-  --primary-hover: #4f46e5;
-  --accent: #8b5cf6;
-  --muted: #6b7280;
-  --border: #e5e7eb;
+  --foreground: #101820;
+  --sidebar-bg: #101820;
+  --sidebar-text: #B1B3B3;
+  --primary: #E87722;
+  --primary-hover: #d46515;
+  --accent: #00A9E0;
+  --muted: #53565A;
+  --border: #B1B3B3;
   --card-bg: #ffffff;
-  --success: #10b981;
-  --warning: #f59e0b;
-  --danger: #ef4444;
+  --success: #658D1B;
+  --warning: #F0B323;
+  --danger: #722257;
 }
 
 * {
@@ -22,8 +49,7 @@
 
 body {
   font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
-    Arial, sans-serif;
+    'Open Sans', 'Segoe UI', Arial, Helvetica, sans-serif;
   background: #f3f4f6;
   color: var(--foreground);
 }
@@ -97,7 +123,7 @@ body {
 .prose em { font-style: italic; }
 .prose blockquote { border-left: 4px solid #c7d2fe; padding-left: 1rem; margin: 0.75rem 0; color: #4b5563; font-style: italic; }
 .prose hr { border-color: #e5e7eb; margin: 1rem 0; }
-.prose a { color: #4f46e5; text-decoration: underline; }
+.prose a { color: #E87722; text-decoration: underline; }
 
 /* TipTap Editor Styles */
 .tiptap {
@@ -131,7 +157,7 @@ body {
 .tiptap mark { background-color: #fef08a; padding: 0.125rem 0; }
 .tiptap hr { border-color: #e5e7eb; margin: 1rem 0; }
 .tiptap blockquote {
-  border-left: 3px solid #6366f1;
+  border-left: 3px solid #E87722;
   padding-left: 1rem;
   margin: 0.75rem 0;
   color: #4b5563;
@@ -175,7 +201,7 @@ body {
   margin-top: 0.25rem;
 }
 .tiptap ul[data-type="taskList"] li label input[type="checkbox"] {
-  accent-color: #6366f1;
+  accent-color: #E87722;
   width: 1rem;
   height: 1rem;
   cursor: pointer;

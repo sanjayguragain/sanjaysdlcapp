@@ -75,7 +75,7 @@ export function ProgressTracker({ artifacts, sdlcMode = "modern", onArtifactClic
                           artifactMap.get(t)?.status === "in_progress" ||
                           artifactMap.get(t)?.status === "awaiting_approval"
                       )
-                    ? "bg-indigo-100 text-indigo-700"
+                    ? "bg-edison-100 text-edison-700"
                     : "bg-gray-100 text-gray-500"
                 }`}
               >
@@ -106,7 +106,7 @@ export function ProgressTracker({ artifacts, sdlcMode = "modern", onArtifactClic
                   <button
                     key={type}
                     onClick={() => onArtifactClick?.(type)}
-                    className="w-full flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:border-indigo-200 hover:bg-indigo-50/50 transition-all text-left"
+                    className="w-full flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:border-edison-200 hover:bg-edison-50/50 transition-all text-left"
                   >
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-800 truncate">

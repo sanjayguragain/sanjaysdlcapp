@@ -131,7 +131,7 @@ export default function EvaluatePage() {
             onClick={() => { setMode("upload"); setError(null); }}
             className={`px-4 py-3 rounded-lg text-sm font-medium border transition-all text-left ${
               mode === "upload"
-                ? "bg-indigo-50 border-indigo-300 text-indigo-700 ring-1 ring-indigo-300"
+                ? "bg-edison-50 border-edison-300 text-edison-700 ring-1 ring-edison-300"
                 : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
             }`}
           >
@@ -146,7 +146,7 @@ export default function EvaluatePage() {
             }}
             className={`px-4 py-3 rounded-lg text-sm font-medium border transition-all text-left ${
               mode === "artifact"
-                ? "bg-indigo-50 border-indigo-300 text-indigo-700 ring-1 ring-indigo-300"
+                ? "bg-edison-50 border-edison-300 text-edison-700 ring-1 ring-edison-300"
                 : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
             }`}
           >
@@ -166,7 +166,7 @@ export default function EvaluatePage() {
               onClick={() => setArtifactType(value)}
               className={`px-4 py-2.5 rounded-lg text-sm font-medium border transition-all ${
                 artifactType === value
-                  ? "bg-indigo-50 border-indigo-300 text-indigo-700 ring-1 ring-indigo-300"
+                  ? "bg-edison-50 border-edison-300 text-edison-700 ring-1 ring-edison-300"
                   : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
               }`}
             >
@@ -192,7 +192,7 @@ export default function EvaluatePage() {
             onClick={() => fileRef.current?.click()}
             className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all ${
               dragOver
-                ? "border-indigo-400 bg-indigo-50"
+                ? "border-edison-400 bg-edison-50"
                 : file
                 ? "border-emerald-300 bg-emerald-50"
                 : "border-gray-300 hover:border-gray-400 bg-white"
@@ -229,7 +229,7 @@ export default function EvaluatePage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
                 <p className="text-sm text-gray-600">
-                  <span className="text-indigo-600 font-medium">Click to upload</span> or drag and drop
+                  <span className="text-edison-600 font-medium">Click to upload</span> or drag and drop
                 </p>
                 <p className="text-xs text-gray-400">DOCX, PDF, Markdown, or Text files</p>
               </div>
@@ -247,7 +247,7 @@ export default function EvaluatePage() {
                 setSelectedProjectId(projectId);
                 loadProjectArtifacts(projectId);
               }}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-edison-500"
               disabled={projectsLoading}
             >
               <option value="">{projectsLoading ? "Loading projects..." : "Select a project"}</option>
@@ -273,7 +273,7 @@ export default function EvaluatePage() {
                       <button
                         onClick={() => setSelectedArtifactId(artifact.id)}
                         className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${
-                          selectedArtifactId === artifact.id ? "bg-indigo-50" : ""
+                          selectedArtifactId === artifact.id ? "bg-edison-50" : ""
                         }`}
                       >
                         <div className="flex items-start justify-between gap-3">
@@ -284,7 +284,7 @@ export default function EvaluatePage() {
                             </p>
                           </div>
                           {selectedArtifactId === artifact.id && (
-                            <span className="text-xs text-indigo-600 font-semibold">Selected</span>
+                            <span className="text-xs text-edison-600 font-semibold">Selected</span>
                           )}
                         </div>
                       </button>
@@ -333,31 +333,31 @@ export default function EvaluatePage() {
         <h3 className="text-sm font-semibold text-gray-900 mb-3">What gets evaluated?</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-600">
           <div className="flex items-start gap-2">
-            <span className="text-indigo-500 mt-0.5">1.</span>
+            <span className="text-edison-500 mt-0.5">1.</span>
             <span><strong>Structure Completeness</strong> — Required sections, headings, order</span>
           </div>
           <div className="flex items-start gap-2">
-            <span className="text-indigo-500 mt-0.5">2.</span>
+            <span className="text-edison-500 mt-0.5">2.</span>
             <span><strong>Requirements Quality</strong> — Precision, testability, metrics</span>
           </div>
           <div className="flex items-start gap-2">
-            <span className="text-indigo-500 mt-0.5">3.</span>
+            <span className="text-edison-500 mt-0.5">3.</span>
             <span><strong>Architecture Completeness</strong> — Components, data flows, integrations</span>
           </div>
           <div className="flex items-start gap-2">
-            <span className="text-indigo-500 mt-0.5">4.</span>
+            <span className="text-edison-500 mt-0.5">4.</span>
             <span><strong>Traceability</strong> — Goals linked to decisions</span>
           </div>
           <div className="flex items-start gap-2">
-            <span className="text-indigo-500 mt-0.5">5.</span>
+            <span className="text-edison-500 mt-0.5">5.</span>
             <span><strong>Security Coverage</strong> — Threat model, controls</span>
           </div>
           <div className="flex items-start gap-2">
-            <span className="text-indigo-500 mt-0.5">6.</span>
+            <span className="text-edison-500 mt-0.5">6.</span>
             <span><strong>Operational Readiness</strong> — Monitoring, deployment</span>
           </div>
           <div className="flex items-start gap-2">
-            <span className="text-indigo-500 mt-0.5">7.</span>
+            <span className="text-edison-500 mt-0.5">7.</span>
             <span><strong>AI Specificity</strong> — Detects generic AI content</span>
           </div>
         </div>

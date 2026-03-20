@@ -220,7 +220,7 @@ export async function POST(
   const projectSlug = slugify(project.name);
   files.push({
     path: "docs/README.md",
-    content: `# ${project.name}\n\nExported from SDLC Platform on ${new Date().toISOString().slice(0, 10)}.\n\n- Project ID: ${project.id}\n- Phase: ${project.phase}\n- Mode: ${project.sdlcMode}\n- Artifacts exported: ${includeAllArtifacts ? project.artifacts.length : 1}\n`,
+    content: `# ${project.name}\n\nExported from SDLC Hub on ${new Date().toISOString().slice(0, 10)}.\n\n- Project ID: ${project.id}\n- Phase: ${project.phase}\n- Mode: ${project.sdlcMode}\n- Artifacts exported: ${includeAllArtifacts ? project.artifacts.length : 1}\n`,
   });
 
   files.push({
