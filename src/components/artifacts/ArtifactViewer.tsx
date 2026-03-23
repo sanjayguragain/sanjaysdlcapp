@@ -41,8 +41,11 @@ function isHtml(text: string): boolean {
 }
 
 function formatMarkdown(text: string): string {
+  const mermaidBlocks: string[] = [];
   text = text.replace(/```\s*mermaid\s*\r?\n([\s\S]*?)```/gi, (_m, code) => {
-    return `<pre class="mermaid">${code.trim()}</pre>`;
+    const token = `__MERMAID_BLOCK_${mermaidBlocks.length}__`;
+    mermaidBlocks.push(code.trim());
+    return token;
   });
 
   const lines = text.split("\n");
@@ -73,6 +76,16 @@ function formatMarkdown(text: string): string {
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
     const line = raw.trimEnd();
+
+    const mermaidToken = line.match(/^__MERMAID_BLOCK_(\d+)__$/);
+    if (mermaidToken) {
+      flushPara();
+      closeList();
+      const idx = Number(mermaidToken[1]);
+      const code = mermaidBlocks[idx] ?? "";
+      out.push(`<pre class="mermaid">${code}</pre>`);
+      continue;
+    }
 
     const h3 = line.match(/^### (.+)$/);
     const h2 = line.match(/^## (.+)$/);

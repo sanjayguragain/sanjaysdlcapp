@@ -73,9 +73,14 @@ export default function ProjectChatPage() {
   const [activeArtifact, setActiveArtifact] =
     useState<SidePanelArtifact | null>(null);
   const [isGeneratingArtifact, setIsGeneratingArtifact] = useState(false);
+  const [generatingArtifactType, setGeneratingArtifactType] = useState<ArtifactType | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [lastRequestedArtifactType, setLastRequestedArtifactType] = useState<ArtifactType | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   // Guided Q&A state — tracks which artifact we're answering questions for
-  const [qaMode, setQaMode] = useState<{ artifactId: string } | null>(null);
+  // and whether the user has replied in this Q&A round.
+  const [qaMode, setQaMode] = useState<{ artifactId: string; hasUserResponse: boolean } | null>(null);
+  const qaModeRef = useRef<{ artifactId: string; hasUserResponse: boolean } | null>(null);
   const qaTimerRef = useRef<NodeJS.Timeout | null>(null);
   const traditionalSeedTriggeredRef = useRef(false);
   const sdlcMode: "modern" | "traditional" =
@@ -153,6 +158,11 @@ export default function ProjectChatPage() {
   // Clear Q&A timer on unmount
   useEffect(() => () => { if (qaTimerRef.current) clearTimeout(qaTimerRef.current); }, []);
 
+  // Keep latest Q&A mode available to delayed callbacks (idle timer, async rebuild triggers)
+  useEffect(() => {
+    qaModeRef.current = qaMode;
+  }, [qaMode]);
+
   // Auto-generate an artifact when arriving with ?autoGenerate=<type> (e.g. from new project wizard)
   const autoGenerateTriggeredRef = React.useRef(false);
   useEffect(() => {
@@ -173,6 +183,7 @@ export default function ProjectChatPage() {
       // handleGenerateArtifact is defined below; trigger via the artifacts API directly
       setIsLoading(true);
       setIsGeneratingArtifact(true);
+      setGeneratingArtifactType(autoType);
       fetch(`/api/projects/${projectId}/artifacts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -228,11 +239,13 @@ export default function ProjectChatPage() {
                         createdAt: qData.assistantMessage.createdAt,
                       },
                     ]);
-                    // Enter Q&A mode and start 2-min idle timer if questions were asked
+                    // Enter Q&A mode, but only arm idle rebuild after the user answers.
                     if (qData.assistantMessage.content.includes("**Q1.**")) {
-                      setQaMode({ artifactId: data.id });
-                      if (qaTimerRef.current) clearTimeout(qaTimerRef.current);
-                      qaTimerRef.current = setTimeout(() => triggerRebuild(data.id), 2 * 60 * 1000);
+                      setQaMode({ artifactId: data.id, hasUserResponse: false });
+                      if (qaTimerRef.current) {
+                        clearTimeout(qaTimerRef.current);
+                        qaTimerRef.current = null;
+                      }
                     }
                   }
                 }
@@ -244,6 +257,7 @@ export default function ProjectChatPage() {
         .finally(() => {
           setIsLoading(false);
           setIsGeneratingArtifact(false);
+          setGeneratingArtifactType(null);
         });
     }, 500);
     return () => clearTimeout(timer);
@@ -252,6 +266,10 @@ export default function ProjectChatPage() {
 
   // ── Rebuild artifact with all collected answers ──────────────────────────
   const triggerRebuild = useCallback(async (artifactId: string) => {
+    const currentQaMode = qaModeRef.current;
+    if (!currentQaMode || currentQaMode.artifactId !== artifactId || !currentQaMode.hasUserResponse) {
+      return;
+    }
     if (qaTimerRef.current) { clearTimeout(qaTimerRef.current); qaTimerRef.current = null; }
     setQaMode(null);
     setIsLoading(true);
@@ -374,8 +392,9 @@ export default function ProjectChatPage() {
       };
       setMessages((prev) => [...prev, streamingMsg]);
 
-      // Reset Q&A idle timer — user is still responding
+      // Start/reset Q&A idle timer only after a real user response.
       if (qaMode) {
+        setQaMode((prev) => prev ? { ...prev, hasUserResponse: true } : prev);
         if (qaTimerRef.current) clearTimeout(qaTimerRef.current);
         qaTimerRef.current = setTimeout(() => triggerRebuild(qaMode.artifactId), 2 * 60 * 1000);
       }
@@ -540,8 +559,11 @@ export default function ProjectChatPage() {
 
   const handleGenerateArtifact = useCallback(
     async (type: ArtifactType) => {
+      setLastRequestedArtifactType(type);
+      setGenerationError(null);
       setIsLoading(true);
       setIsGeneratingArtifact(true);
+      setGeneratingArtifactType(type);
       try {
         const res = await fetch(`/api/projects/${projectId}/artifacts`, {
           method: "POST",
@@ -566,6 +588,7 @@ export default function ProjectChatPage() {
           }
 
           if (data) {
+            setGenerationError(null);
             setActiveArtifact({
               id: data.id,
               type: data.type,
@@ -606,24 +629,57 @@ export default function ProjectChatPage() {
                           createdAt: qData.assistantMessage.createdAt,
                         },
                       ]);
-                      // Enter Q&A mode and start 2-min idle timer if questions were asked
+                      // Enter Q&A mode, but wait for a user response before
+                      // starting the idle rebuild timer.
                       if (qData.assistantMessage.content.includes("**Q1.**")) {
-                        setQaMode({ artifactId: data.id });
-                        if (qaTimerRef.current) clearTimeout(qaTimerRef.current);
-                        qaTimerRef.current = setTimeout(() => triggerRebuild(data.id), 2 * 60 * 1000);
+                        setQaMode({ artifactId: data.id, hasUserResponse: false });
+                        if (qaTimerRef.current) {
+                          clearTimeout(qaTimerRef.current);
+                          qaTimerRef.current = null;
+                        }
                       }
                     }
                   }
                 })
                 .catch(() => {});
             }
+          } else {
+            setGenerationError(`Could not load the ${type.toUpperCase()} artifact after generation. Please retry.`);
           }
+        } else {
+          let errorMessage = `Failed to generate ${type.toUpperCase()} (HTTP ${res.status}).`;
+          try {
+            const payload = await res.json();
+            if (payload?.error) errorMessage = payload.error;
+          } catch {
+            // Keep fallback error message.
+          }
+          setGenerationError(errorMessage);
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `gen-error-${Date.now()}`,
+              role: "assistant",
+              content: `I couldn't generate **${type.toUpperCase()}** right now. ${errorMessage}`,
+              createdAt: new Date().toISOString(),
+            },
+          ]);
         }
       } catch {
-        // ignore
+        setGenerationError(`Failed to generate ${type.toUpperCase()} due to a network or server error.`);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `gen-error-${Date.now()}`,
+            role: "assistant",
+            content: `I couldn't generate **${type.toUpperCase()}** due to a network or server error. Please retry.`,
+            createdAt: new Date().toISOString(),
+          },
+        ]);
       } finally {
         setIsLoading(false);
         setIsGeneratingArtifact(false);
+        setGeneratingArtifactType(null);
       }
     },
     [projectId, triggerRebuild]
@@ -976,7 +1032,7 @@ export default function ProjectChatPage() {
     };
   }, [projectId, activeArtifact]);
 
-  const showSidePanel = activeArtifact !== null || isGeneratingArtifact;
+  const showSidePanel = activeArtifact !== null || isGeneratingArtifact || generationError !== null;
 
   return (
     <div className="h-full flex flex-col min-h-0">
@@ -1039,20 +1095,54 @@ export default function ProjectChatPage() {
         {/* Right: Artifact Side Panel */}
         {showSidePanel && (
           <div className="w-3/5 min-w-[480px] overflow-hidden flex flex-col">
-            <ArtifactSidePanel
-              artifact={activeArtifact}
-              projectId={projectId}
-              isGenerating={isGeneratingArtifact}
-              onClose={() => setActiveArtifact(null)}
-              onSave={handleSaveArtifact}
-              onImprove={handleImproveArtifact}
-              onAutofill={handleAutofillArtifact}
-              onSyncFeedback={handleSyncFeedback}
-              isAutofilling={isAutofilling}
-              isSyncingFeedback={isSyncingFeedback}
-              syncFeedbackSummary={syncFeedbackSummary}
-              onSubmitForApproval={handleSubmitForApproval}
-            />
+            {generationError && !activeArtifact && !isGeneratingArtifact ? (
+              <div className="flex-1 flex items-center justify-center p-8 bg-white border-l border-gray-200">
+                <div className="max-w-md w-full rounded-xl border border-red-200 bg-red-50 p-5">
+                  <h3 className="text-sm font-semibold text-red-800 mb-2">Artifact Generation Failed</h3>
+                  <p className="text-sm text-red-700 mb-4">{generationError}</p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (lastRequestedArtifactType) {
+                          void handleGenerateArtifact(lastRequestedArtifactType);
+                        }
+                      }}
+                      disabled={!lastRequestedArtifactType}
+                      className="px-3 py-1.5 text-xs font-medium rounded bg-edison-600 text-white hover:bg-edison-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Retry {lastRequestedArtifactType?.toUpperCase() ?? "Generation"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setGenerationError(null)}
+                      className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <ArtifactSidePanel
+                artifact={activeArtifact}
+                projectId={projectId}
+                isGenerating={isGeneratingArtifact}
+                generatingArtifactType={generatingArtifactType}
+                onClose={() => {
+                  setActiveArtifact(null);
+                  setGenerationError(null);
+                }}
+                onSave={handleSaveArtifact}
+                onImprove={handleImproveArtifact}
+                onAutofill={handleAutofillArtifact}
+                onSyncFeedback={handleSyncFeedback}
+                isAutofilling={isAutofilling}
+                isSyncingFeedback={isSyncingFeedback}
+                syncFeedbackSummary={syncFeedbackSummary}
+                onSubmitForApproval={handleSubmitForApproval}
+              />
+            )}
           </div>
         )}
       </div>

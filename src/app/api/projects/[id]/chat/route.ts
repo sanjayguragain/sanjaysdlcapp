@@ -4,7 +4,7 @@ import { generateChatResponse, streamChatResponse } from "@/lib/ai";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { evaluateArtifactQuality } from "@/lib/artifactChecks";
-import { buildChatSkillContext } from "@/lib/skillLoader";
+import { applyArtifactWatermark, buildChatSkillContext } from "@/lib/skillLoader";
 
 /** Format stakeholders JSON into a context block for the AI prompt. */
 function formatStakeholders(raw: string | null | undefined): string {
@@ -113,12 +113,13 @@ async function persistUpdatedArtifact(
 ) {
   const artifact = await prisma.artifact.findUnique({ where: { id: artifactId } });
   if (!artifact || !nextContent) return null;
+  const watermarkedContent = applyArtifactWatermark(artifact.type, nextContent);
 
   // Allow updates even if content appears identical, in case formatting changed
   // (HTML formatting updates might be functionally identical but visually different)
 
   const before = evaluateArtifactQuality(artifact.type as any, artifact.content);
-  const after = evaluateArtifactQuality(artifact.type as any, nextContent);
+  const after = evaluateArtifactQuality(artifact.type as any, watermarkedContent);
 
   await saveVersionSnapshot(artifactId, artifact.content, artifact.version);
 
@@ -131,7 +132,7 @@ async function persistUpdatedArtifact(
   return prisma.artifact.update({
     where: { id: artifactId },
     data: {
-      content: nextContent,
+      content: watermarkedContent,
       version: artifact.version + 1,
       confidenceScore: nextConfidenceScore,
       status: artifact.status,
@@ -204,6 +205,10 @@ export async function POST(
       `- Align with the project name, description, and uploaded documents where possible.\n` +
       `- If a value cannot be inferred from skills, templates, documents, or project context, use the most common industry-standard default for this type of product.\n` +
       `- Keep all existing resolved content intact — only replace [To be confirmed — ...] markers.\n` +
+      `- CRITICAL: Never invent or add fake personal names for authors, stakeholders, approvers, owners, or user personas.\n` +
+      `- Preserve any existing real names exactly as-is if they already exist in the artifact.\n` +
+      `- If a person's name is missing or unknown, use role-only labels (for example: "Product Manager", "Engineering Lead", "Compliance Officer", "Field Supervisor") instead of creating a name.\n` +
+      `- Ignore example/sample names shown in template guidance (for example: "Jane Doe", "John Smith", "Bob Lee"). Do not copy them into the final artifact unless those exact names already exist in project context or the artifact input.\n` +
       `- Do NOT add unrelated sections or change the document type/format.\n` +
       `- If there is an Open Questions / Outstanding Items section, remove every item that has now been answered.\n` +
       `- If all open questions are now resolved, replace that section body with: "All previously open questions have been resolved and incorporated into the document."\n` +

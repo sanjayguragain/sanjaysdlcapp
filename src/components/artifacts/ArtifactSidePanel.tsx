@@ -27,6 +27,7 @@ interface ArtifactSidePanelProps {
   artifact: SidePanelArtifact | null;
   projectId?: string;
   isGenerating?: boolean;
+  generatingArtifactType?: ArtifactType | null;
   onClose: () => void;
   onSave?: (content: string) => void;
   onImprove?: () => void;
@@ -61,6 +62,7 @@ export function ArtifactSidePanel({
   artifact,
   projectId,
   isGenerating,
+  generatingArtifactType,
   onClose,
   onSave,
   onImprove,
@@ -484,7 +486,7 @@ export function ArtifactSidePanel({
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-gray-900 truncate">
               {isGenerating && !artifact
-                ? "Generating artifact..."
+                ? `Generating ${ARTIFACT_DEFINITIONS.find((d) => d.type === generatingArtifactType)?.label ?? "artifact"}…`
                 : artifact?.title || "Artifact"}
             </h3>
             {def && (
@@ -778,8 +780,41 @@ export function ArtifactSidePanel({
         </div>
       )}
 
+      {isAutofilling && artifact && (
+        <div className="mx-4 my-2 p-3 rounded-lg border border-edison-blue-200 bg-edison-blue-50 shrink-0">
+          <div className="flex items-start gap-2.5">
+            <div className="w-5 h-5 rounded-full border-2 border-edison-blue-300 border-t-edison-blue-700 animate-spin mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-edison-blue-900">Applying Best Practices to This Document</p>
+              <p className="text-[11px] text-edison-blue-800 mt-0.5">
+                Edison SDLC Assistant is rewriting sections, resolving open questions, and updating the artifact content.
+              </p>
+              <div className="mt-2 h-1.5 rounded-full bg-edison-blue-100 overflow-hidden">
+                <div className="h-full w-1/3 bg-edison-blue-600 rounded-full animate-pulse" />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Editor Area */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
+        {isAutofilling && artifact && (
+          <div className="absolute inset-0 z-20 bg-white/75 backdrop-blur-[1px] flex items-center justify-center">
+            <div className="w-full max-w-sm rounded-xl border border-edison-blue-200 bg-white shadow-sm p-4">
+              <div className="flex items-center gap-3">
+                <div className="relative w-10 h-10">
+                  <div className="absolute inset-0 rounded-full bg-edison-blue-200/40 animate-ping" />
+                  <div className="absolute inset-0 rounded-full border-2 border-edison-blue-600 border-t-transparent animate-spin" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Autofill in Progress</p>
+                  <p className="text-xs text-gray-600">Updating the document with best-practice content...</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         {isGenerating && !artifact ? (
           <div className="flex flex-col items-center justify-center flex-1 px-8">
             <div className="w-full max-w-md rounded-2xl border border-edison-100 bg-gradient-to-br from-edison-50 via-white to-edison-blue-50 p-6 shadow-sm">

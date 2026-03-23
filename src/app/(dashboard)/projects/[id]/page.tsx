@@ -310,39 +310,23 @@ export default function ProjectDetailPage() {
         </div>
       )}
 
-      {/* Progress Tracker */}
-      <div className="mt-6">
-        <ProgressTracker
-            sdlcMode={project.sdlcMode === "traditional" ? "traditional" : "modern"}
-          artifacts={artifactStates}
-          onArtifactClick={(type) => {
-            const artifact = project.artifacts.find((a) => a.type === type);
-            if (artifact) {
-              router.push(`/projects/${project.id}/artifacts/${artifact.id}`);
-            }
-          }}
-        />
-      </div>
-
-      {/* Two-column layout: Documents + Artifacts */}
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Documents Upload */}
+      {/* Main two-column layout: Progress Tracker (left) + Artifacts (right) */}
+      <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        {/* Left column: Progress Tracker */}
         <div className="lg:col-span-1">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-semibold text-gray-900">Documents</h3>
-            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-              {documents.length} file{documents.length !== 1 ? "s" : ""}
-            </span>
-          </div>
-          <DocumentUpload
-            projectId={project.id}
-            documents={documents}
-            onUpload={(doc) => setDocuments((prev) => [doc, ...prev])}
-            onDelete={(id) => setDocuments((prev) => prev.filter((d) => d.id !== id))}
+          <ProgressTracker
+            sdlcMode={project.sdlcMode === "traditional" ? "traditional" : "modern"}
+            artifacts={artifactStates}
+            onArtifactClick={(type) => {
+              const artifact = project.artifacts.find((a) => a.type === type);
+              if (artifact) {
+                router.push(`/projects/${project.id}/artifacts/${artifact.id}`);
+              }
+            }}
           />
         </div>
 
-        {/* Artifacts Grid */}
+        {/* Right column: Artifacts (all states) */}
         <div className="lg:col-span-2">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-semibold text-gray-900">Artifacts</h3>
@@ -352,15 +336,36 @@ export default function ProjectDetailPage() {
           </div>
 
           {project.artifacts.length === 0 && readyDefs.length === 0 ? (
-            <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
-              <div className="text-3xl mb-3">💬</div>
-              <h4 className="font-semibold text-gray-900 mb-2">No artifacts yet</h4>
-              <p className="text-sm text-gray-500 mb-4">
-                Open the AI chat to start generating documentation artifacts.
-              </p>
-              <Link href={`/projects/${project.id}/chat`}>
-                <Button variant="primary" size="md">Start Chat</Button>
-              </Link>
+            <div className="space-y-4">
+              <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+                <div className="text-3xl mb-3">💬</div>
+                <h4 className="font-semibold text-gray-900 mb-2">No artifacts yet</h4>
+                <p className="text-sm text-gray-500 mb-4">
+                  Open the AI chat to start generating documentation artifacts.
+                </p>
+                <Link href={`/projects/${project.id}/chat`}>
+                  <Button variant="primary" size="md">Start Chat</Button>
+                </Link>
+              </div>
+              <div className="pt-2">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Documents
+                  </p>
+                  <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                    {documents.length} file{documents.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+                <DocumentUpload
+                  projectId={project.id}
+                  documents={documents}
+                  onUpload={(doc) => setDocuments((prev) => [doc, ...prev])}
+                  onDelete={(id) => setDocuments((prev) => prev.filter((d) => d.id !== id))}
+                />
+              </div>
             </div>
           ) : (
             <div className="space-y-4">
@@ -455,10 +460,31 @@ export default function ProjectDetailPage() {
                   </div>
                 </div>
               )}
+
+              {/* Documents — below waiting-for-dependencies */}
+              <div className="pt-2">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Documents
+                  </p>
+                  <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                    {documents.length} file{documents.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+                <DocumentUpload
+                  projectId={project.id}
+                  documents={documents}
+                  onUpload={(doc) => setDocuments((prev) => [doc, ...prev])}
+                  onDelete={(id) => setDocuments((prev) => prev.filter((d) => d.id !== id))}
+                />
+              </div>
             </div>
           )}
-        </div>{/* end lg:col-span-2 */}
-      </div>{/* end two-column grid */}
+        </div>{/* end Artifacts right column */}
+      </div>{/* end main two-column grid */}
 
       <Modal
         isOpen={publishOpen}

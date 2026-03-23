@@ -4,14 +4,20 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Node, mergeAttributes } from "@tiptap/core";
 import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/core";
-import { renderMermaidCodeToSvg } from "@/lib/mermaidRender";
+
+function sanitizeMermaidEditorCode(input: string): string {
+  return input
+    .replace(/\r\n?/g, "\n")
+    .replace(/^\s*%%\s*mermaid\s*\n?/i, "")
+    .replace(/^\s*```\s*mermaid\s*\n?/i, "")
+    .replace(/\n?```\s*$/i, "")
+    .trim();
+}
 
 // ─── React NodeView component ─────────────────────────────────────────────────
 
 function MermaidNodeView({ node, updateAttributes, editor }: NodeViewProps) {
   const code = (node.attrs.code as string) ?? "";
-  const [svg, setSvg] = useState<string | null>(null);
-  const [renderError, setRenderError] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editCode, setEditCode] = useState(code);
 
@@ -20,22 +26,8 @@ function MermaidNodeView({ node, updateAttributes, editor }: NodeViewProps) {
     setEditCode(code);
   }, [code]);
 
-  // Re-render SVG whenever the stored code changes
-  useEffect(() => {
-    if (!code.trim()) return;
-    setRenderError(false);
-    setSvg(null);
-    renderMermaidCodeToSvg(code, "mmd-block").then((result) => {
-      if (result) {
-        setSvg(result);
-      } else {
-        setRenderError(true);
-      }
-    });
-  }, [code]);
-
   const handleApply = useCallback(() => {
-    updateAttributes({ code: editCode });
+    updateAttributes({ code: sanitizeMermaidEditorCode(editCode) });
     setIsEditing(false);
   }, [editCode, updateAttributes]);
 
@@ -53,24 +45,15 @@ function MermaidNodeView({ node, updateAttributes, editor }: NodeViewProps) {
 
         {/* ── Diagram view ── */}
         {!isEditing && (
-          <div className="p-4 flex justify-center overflow-x-auto bg-white">
-            {svg ? (
-              <div dangerouslySetInnerHTML={{ __html: svg }} />
-            ) : renderError ? (
-              <div className="w-full text-sm text-red-600 bg-red-50 p-3 rounded font-mono whitespace-pre-wrap">
-                {`%% mermaid\n${code}`}
-                <p className="mt-2 text-red-500 text-xs not-italic">⚠ Diagram syntax error — click &ldquo;Edit Code&rdquo; to fix</p>
-              </div>
-            ) : (
-              <div className="text-xs text-slate-400 py-6 animate-pulse">Rendering diagram…</div>
-            )}
+          <div className="p-4 overflow-x-auto bg-slate-950">
+            <pre className="text-xs text-slate-100 font-mono whitespace-pre-wrap">{code}</pre>
           </div>
         )}
 
         {/* ── Code editor ── */}
         {isEditing && (
           <div className="p-3 bg-gray-900">
-            <div className="text-xs text-gray-400 mb-1 font-mono select-text">%% mermaid</div>
+            <div className="text-xs text-gray-400 mb-1 font-mono select-text">mermaid</div>
             <textarea
               className="w-full min-h-[140px] bg-gray-800 text-green-300 font-mono text-xs p-2 rounded border border-gray-600 focus:outline-none focus:ring-1 focus:ring-edison-400 resize-y select-text"
               value={editCode}
@@ -104,7 +87,7 @@ function MermaidNodeView({ node, updateAttributes, editor }: NodeViewProps) {
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/>
             </svg>
-            Mermaid Diagram
+            Mermaid Source
           </div>
           {isEditable && !isEditing && (
             <button

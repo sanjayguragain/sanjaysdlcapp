@@ -12,7 +12,12 @@ import fs from "fs";
 import path from "path";
 
 // ── In-memory cache ───────────────────────────────────────────────────────────
-const _cache = new Map<string, string>();
+type CachedFile = {
+  content: string;
+  mtimeMs: number;
+};
+
+const _cache = new Map<string, CachedFile>();
 
 /** Absolute path to the .github directory in this repo. */
 const GITHUB_DIR = path.join(process.cwd(), ".github");
@@ -21,11 +26,19 @@ const GITHUB_DIR = path.join(process.cwd(), ".github");
 
 /** Read a file relative to .github/. Returns empty string on error. */
 function readGithubFile(relativePath: string): string {
-  if (_cache.has(relativePath)) return _cache.get(relativePath)!;
   const full = path.join(GITHUB_DIR, relativePath);
   try {
+    const stat = fs.statSync(full);
+    const cached = _cache.get(relativePath);
+    if (cached && cached.mtimeMs === stat.mtimeMs) {
+      return cached.content;
+    }
+
     const text = fs.readFileSync(full, "utf-8");
-    _cache.set(relativePath, text);
+    _cache.set(relativePath, {
+      content: text,
+      mtimeMs: stat.mtimeMs,
+    });
     return text;
   } catch {
     console.warn(`[skillLoader] Cannot read: ${full}`);
@@ -73,6 +86,11 @@ export function loadPrompt(filename: string): string {
   return stripFrontmatter(readGithubFile(`prompts/${filename}`));
 }
 
+/** Load an engineering standard from .github/standards/<filename>. */
+export function loadStandard(filename: string): string {
+  return stripFrontmatter(readGithubFile(`standards/${filename}`));
+}
+
 /** Load a canonical template from .github/templates/<relative-path>. */
 export function loadTemplate(templateRelPath: string): string {
   return stripFrontmatter(readGithubFile(`templates/${templateRelPath}`));
@@ -87,33 +105,45 @@ const SKILL_MAP: Record<string, string[]> = {
     "code-generation/sce-prd-generator/SKILL.md",
     "devops/sce-requirements-gatherer/SKILL.md",
     "architecture/sce-diagram-creator/SKILL.md",
+    "branding/brand-guidelines/SKILL.md",
+    "branding/frontend-designer/SKILL.md",
   ],
   brd: [
     "requirements-elicitation/business-rules-analysis/SKILL.md",
     "requirements-elicitation/sce-technical-requirement-writer/SKILL.md",
     "devops/sce-requirements-gatherer/SKILL.md",
+    "branding/brand-guidelines/SKILL.md",
+    "branding/frontend-designer/SKILL.md",
   ],
   avd: [
     "architecture/sce-adr-writer/SKILL.md",
     "code-generation/sce-flow-mapper/SKILL.md",
     "architecture/sce-diagram-creator/SKILL.md",
+    "branding/brand-guidelines/SKILL.md",
+    "branding/frontend-designer/SKILL.md",
   ],
   srs: [
     "requirements-elicitation/sce-technical-requirement-writer/SKILL.md",
     "requirements-elicitation/use-case-2.0/SKILL.md",
     "devops/sce-requirements-gatherer/SKILL.md",
+    "branding/brand-guidelines/SKILL.md",
+    "branding/frontend-designer/SKILL.md",
   ],
   sad: [
     "architecture/sce-adr-writer/SKILL.md",
     "code-generation/sce-data-model-extractor/SKILL.md",
     "code-generation/sce-flow-mapper/SKILL.md",
     "architecture/sce-diagram-creator/SKILL.md",
+    "branding/brand-guidelines/SKILL.md",
+    "branding/frontend-designer/SKILL.md",
   ],
   ses: [
     "requirements-elicitation/sce-technical-requirement-writer/SKILL.md",
     "testing/sce-tdd-template-generator/SKILL.md",
     "compliance/sce-config-detector/SKILL.md",
     "architecture/sce-diagram-creator/SKILL.md",
+    "branding/brand-guidelines/SKILL.md",
+    "branding/frontend-designer/SKILL.md",
   ],
   prd_validation: [
     "requirements-elicitation/sce-6cs-quality-framework/SKILL.md",
@@ -245,6 +275,61 @@ const TEMPLATE_MAP: Record<string, string[]> = {
     "PRD/PRD-{product-name-kebab-case}.md",
   ],
 };
+
+// ── Standards map: artifact type → standards files ──────────────────────────
+// Standards provide cross-cutting governance and quality constraints that must
+// be applied in addition to skills and prompts.
+
+const STANDARD_MAP: Record<string, string[]> = {
+  _default: [
+    "CODING-BEST-PRACTICES.md",
+    "CONTEXT_PASSING_STANDARDS.md",
+    "AGENT-SKILLS-STANDARD-QUICK-REFERENCE.md",
+  ],
+  prd: [
+    "PANCAKE-PROTOCOL-QUICK-REFERENCE.md",
+  ],
+  brd: [
+    "PANCAKE-PROTOCOL-QUICK-REFERENCE.md",
+  ],
+  avd: [
+    "PANCAKE-PROTOCOL-QUICK-REFERENCE.md",
+    "TECH_STACK_STANDARDS.md",
+  ],
+  srs: [
+    "PANCAKE-PROTOCOL-QUICK-REFERENCE.md",
+    "TECH_STACK_STANDARDS.md",
+  ],
+  sad: [
+    "PANCAKE-PROTOCOL-QUICK-REFERENCE.md",
+    "TECH_STACK_STANDARDS.md",
+  ],
+  ses: [
+    "PANCAKE-PROTOCOL-QUICK-REFERENCE.md",
+    "TECH_STACK_STANDARDS.md",
+  ],
+  cyber_risk_analysis: [
+    "CYBERSTANDARDS_V10.md",
+    "tech-policy-matrix.yaml",
+  ],
+  compliance_report: [
+    "CYBERSTANDARDS_V10.md",
+    "tech-policy-matrix.yaml",
+    "APPROVAL_REQUEST.md",
+  ],
+  deployment_plan: [
+    "TECH_STACK_STANDARDS.md",
+    "tech-policy-matrix.yaml",
+    "APPROVAL_REQUEST.md",
+  ],
+};
+
+const MAX_STANDARD_CHARS = 12000;
+
+function compactStandard(content: string): string {
+  if (content.length <= MAX_STANDARD_CHARS) return content;
+  return `${content.slice(0, MAX_STANDARD_CHARS)}\n\n...[truncated standard content for prompt budget]...`;
+}
 
 // ── Per-type generation instructions ─────────────────────────────────────────
 // These instruct the LLM what to produce; the skill specs above tell it *how*.
@@ -494,6 +579,117 @@ export interface ArtifactMeta {
   changeSummary?: string;
 }
 
+export interface ArtifactWatermarkMetadata {
+  engine: string;
+  agentsUsed: string[];
+  skillsUsed: string[];
+  referencesUsed: string[];
+}
+
+function uniquePreserveOrder(items: string[]): string[] {
+  return [...new Set(items.filter(Boolean))];
+}
+
+export function getArtifactWatermarkMetadata(type: string): ArtifactWatermarkMetadata {
+  const agentsUsed = type === "prd"
+    ? ["agents/PRD-Builder.agent.md"]
+    : [];
+
+  const skillsUsed = (SKILL_MAP[type] ?? []).map((skillPath) => `skills/${skillPath}`);
+  const standardFiles = uniquePreserveOrder([
+    ...(STANDARD_MAP._default ?? []),
+    ...(STANDARD_MAP[type] ?? []),
+  ]);
+  const referencesUsed = [
+    ...(TEMPLATE_MAP[type] ?? []).map((templatePath) => `templates/${templatePath}`),
+    ...(PROMPT_MAP[type] ?? []).map((promptPath) => `prompts/${promptPath}`),
+    ...standardFiles.map((standardPath) => `standards/${standardPath}`),
+  ];
+
+  return {
+    engine: "SDLC Hub Artifact Engine",
+    agentsUsed: uniquePreserveOrder(agentsUsed),
+    skillsUsed: uniquePreserveOrder(skillsUsed),
+    referencesUsed: uniquePreserveOrder(referencesUsed),
+  };
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function buildWatermarkJson(metadata: ArtifactWatermarkMetadata): string {
+  return JSON.stringify(
+    {
+      generated_by: {
+        engine: metadata.engine,
+      },
+      agents_used: metadata.agentsUsed,
+      skills_used: metadata.skillsUsed,
+      references_used: metadata.referencesUsed,
+    },
+    null,
+    2
+  );
+}
+
+export function buildArtifactWatermarkSection(
+  type: string,
+  format: "html" | "markdown" = "html"
+): string {
+  const metadata = getArtifactWatermarkMetadata(type);
+  const watermarkJson = buildWatermarkJson(metadata);
+
+  if (format === "markdown") {
+    return [
+      "## Watermark",
+      "",
+      `Generated by: ${metadata.engine}`,
+      "",
+      "```json",
+      watermarkJson,
+      "```",
+    ].join("\n");
+  }
+
+  return [
+    "<h2>Watermark</h2>",
+    `<p>Generated by: ${metadata.engine}</p>`,
+    `<pre><code class="language-json">${escapeHtml(watermarkJson)}</code></pre>`,
+  ].join("\n");
+}
+
+function stripExistingArtifactWatermark(content: string, format: "html" | "markdown"): string {
+  let cleaned = content
+    .replace(/\s*<!--\s*generated_by:[\s\S]*?-->\s*/gi, "\n")
+    .replace(/\s*<!--\s*skills_used:[\s\S]*?-->\s*/gi, "\n")
+    .replace(/\s*<!--\s*references_used:[\s\S]*?-->\s*/gi, "\n");
+
+  if (format === "html") {
+    cleaned = cleaned.replace(/\s*<h[1-6][^>]*>\s*Watermark\s*<\/h[1-6]>[\s\S]*$/i, "");
+  } else {
+    cleaned = cleaned.replace(/\n{0,2}##\s+Watermark\s*[\s\S]*$/i, "");
+  }
+
+  return cleaned.trim();
+}
+
+export function applyArtifactWatermark(type: string, content: string): string {
+  const trimmed = content.trim();
+  if (!trimmed) return content;
+
+  const format: "html" | "markdown" = /<[a-z][\s\S]*>/i.test(trimmed)
+    ? "html"
+    : "markdown";
+  const withoutExisting = stripExistingArtifactWatermark(trimmed, format);
+  const watermarkSection = buildArtifactWatermarkSection(type, format);
+
+  return `${withoutExisting}\n\n${watermarkSection}`.trim();
+}
+
 export function buildArtifactPrompt(type: string, meta?: ArtifactMeta): string {
   // 1. Agent spec (PRD only) — Phase 1 stripped so AI never outputs Q&A instead of document
   const rawAgent = type === "prd" ? loadAgent("PRD-Builder.agent.md") : "";
@@ -536,19 +732,21 @@ export function buildArtifactPrompt(type: string, meta?: ArtifactMeta): string {
     .filter(Boolean)
     .join("\n\n");
 
-  const skillNames = skillPaths
-    .map((p) => p.split("/").slice(-2, -1)[0] ?? path.basename(p, ".md"))
-    .filter(Boolean);
-  const referencesUsed = [
-    ...(type === "prd" ? ["agents/PRD-Builder.agent.md"] : []),
-    ...templateFiles.map((f) => `templates/${f}`),
-    ...promptFiles.map((f) => `prompts/${f}`),
-  ];
-  const watermarkBlock = [
-    "<!-- generated_by: SDLC Hub Artifact Engine -->",
-    `<!-- skills_used: ${skillNames.length ? skillNames.join(", ") : "none"} -->`,
-    `<!-- references_used: ${referencesUsed.length ? referencesUsed.join(", ") : "none"} -->`,
-  ].join("\n");
+  // 5. Engineering standards
+  const standardFiles = uniquePreserveOrder([
+    ...(STANDARD_MAP._default ?? []),
+    ...(STANDARD_MAP[type] ?? []),
+  ]);
+  const standardBlocks = standardFiles
+    .map((f) => {
+      const content = loadStandard(f);
+      if (!content) return null;
+      return `=============================================================\nENGINEERING STANDARD — ${f}\n=============================================================\n${compactStandard(content)}`;
+    })
+    .filter(Boolean)
+    .join("\n\n");
+
+  const watermarkBlock = buildArtifactWatermarkSection(type, "html");
 
   // 5. Generation instruction — inject document metadata for PRD
   let baseInstruction = TYPE_INSTRUCTIONS[type]
@@ -588,14 +786,17 @@ OUTPUT RULES (mandatory — override any conflicting instruction above)
 =============================================================
 - DIRECT GENERATION MODE: produce the complete document NOW. Do NOT ask clarifying questions, do NOT output a Q&A table, do NOT describe what you are about to write. Start writing the document immediately.
 - Follow the structure, sections, and conventions defined by the skill specification(s) above.
+- Apply the ENGINEERING STANDARD blocks as mandatory governance constraints. Standards are authoritative unless a canonical template requires stricter structure.
 - If a CANONICAL TEMPLATE block is present above, its section names and section order are mandatory and override any conflicting instructions from prompt files or generalized guidance.
 - Do not rename, collapse, omit, or reorder canonical template sections.
+- SKILL-DRIVEN COMPLETION (MANDATORY): For every section where loaded skills provide concrete guidance, you MUST populate that section with specific, actionable content from those skills instead of placeholders.
+- UI/UX + BRANDING COMPLETION (MANDATORY): When branding/frontend skills are present in context, fill UI/UX-related portions (design specification, visual language, typography, colors, interaction behavior, responsive behavior, accessibility expectations) with concrete Edison-aligned values.
+- Do NOT use [To be confirmed — ...] for fields that can be completed from loaded skill, template, and prompt context.
 - Extract every specific fact from the Project Context provided — do NOT invent baselines, owners, system names, dates, or compliance claims.
 - For any unknown or unconfirmed information: write [To be confirmed — <reason>] inline and add a matching entry to an "Open Questions / Issues Log" section at the end.
 - Use proper semantic HTML: <h1>, <h2>, <h3>, <p>, <ul>, <ol>, <li>, <table>, <thead>, <tbody>, <tr>, <th>, <td>, <strong>, <em>.
 - Output the HTML document body content ONLY — no triple-backtick fences, no markdown headings, no preamble text, no delimiters.
 - DEPTH IS CRITICAL: Be thorough and comprehensive. Every section must contain substantive content — multiple paragraphs, specific requirements, measurable targets, and detailed rationale. A sparse document with mostly placeholders will fail quality review.
-- TARGET LENGTH: The document should be extensive enough to serve as a real enterprise deliverable. For PRDs this means 4000+ words with 15+ functional requirements. For other artifact types, aim for the level of detail a senior reviewer would expect.
 - Use your domain expertise to infer reasonable defaults, architecture patterns, and industry best practices where the project context allows — always marking assumptions clearly.
 - NEVER claim the output is "too large", "exceeds token limits", or offer to split into parts. NEVER present the user with "Option A / Option B / Option C" choices about output size. You MUST produce the FULL document in a SINGLE response. Do NOT output meta-commentary about response length — just write the complete document.`;
 
@@ -603,7 +804,7 @@ OUTPUT RULES (mandatory — override any conflicting instruction above)
 =============================================================
 WATERMARK BLOCK (mandatory — append as final lines)
 =============================================================
-Append this exact watermark block at the very end of the document body:
+Append this exact watermark section at the very end of the document body:
 ${watermarkBlock}`;
 
   const directiveHeader =
@@ -618,7 +819,7 @@ Just write the document.
 
 `;
 
-  const contextBlocks = [agentBlock, skillBlocks, templateBlocks, promptBlocks]
+  const contextBlocks = [agentBlock, skillBlocks, templateBlocks, promptBlocks, standardBlocks]
     .filter((b) => !!b)
     .map((b) => `${b}\n\n`)
     .join("");
@@ -696,11 +897,25 @@ export function buildChatSkillContext(artifactType: string): string {
     .filter(Boolean)
     .join("\n\n");
 
-  const blocks = [agentBlock, skillBlocks, templateBlocks, promptBlocks]
+  // 5. Standards
+  const standardFiles = uniquePreserveOrder([
+    ...(STANDARD_MAP._default ?? []),
+    ...(STANDARD_MAP[artifactType] ?? []),
+  ]);
+  const standardBlocks = standardFiles
+    .map((f) => {
+      const content = loadStandard(f);
+      if (!content) return null;
+      return `=== STANDARD — ${f} ===\n${compactStandard(content)}`;
+    })
+    .filter(Boolean)
+    .join("\n\n");
+
+  const blocks = [agentBlock, skillBlocks, templateBlocks, promptBlocks, standardBlocks]
     .filter(Boolean)
     .join("\n\n");
 
   if (!blocks.trim()) return "";
 
-  return `\n\n=== SKILL & REFERENCE CONTEXT FOR ${artifactType.toUpperCase()} ===\nThe following agents, skills, templates, and prompts define how ${artifactType.replace(/_/g, " ")} artifacts should be structured. Use them as authoritative reference when discussing, reviewing, or updating this artifact type.\n\n${blocks}`;
+  return `\n\n=== SKILL & REFERENCE CONTEXT FOR ${artifactType.toUpperCase()} ===\nThe following agents, skills, templates, prompts, and standards define how ${artifactType.replace(/_/g, " ")} artifacts should be structured. Use them as authoritative reference when discussing, reviewing, or updating this artifact type.\n\n${blocks}`;
 }

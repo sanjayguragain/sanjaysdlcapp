@@ -148,7 +148,7 @@ export function ChatInterface({
           </div>
           <div>
             <h3 className="font-semibold text-gray-900 text-sm">
-              Edison AI Assistant
+              Edison SDLC Assistant
             </h3>
             <p className="text-xs text-gray-500">
               {sdlcMode === "traditional"
@@ -260,7 +260,7 @@ export function ChatInterface({
               </svg>
             </div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Edison AI Assistant
+              Edison SDLC Assistant
             </h3>
             <p className="text-sm text-gray-500 max-w-md mb-6">
               I can help you generate product documentation artifacts, analyze

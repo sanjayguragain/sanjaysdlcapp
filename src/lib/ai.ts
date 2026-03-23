@@ -1,10 +1,9 @@
 import { ArtifactType } from "@/types";
-import { buildArtifactPrompt, buildChatSkillContext, getArtifactModel, getPrdAgentRulesForChat, loadTemplate } from "./skillLoader";
+import { applyArtifactWatermark, buildArtifactPrompt, buildChatSkillContext, getArtifactModel, getPrdAgentRulesForChat, loadTemplate } from "./skillLoader";
 import { isCopilotSdkEnabled, copilotSendAndWait, copilotStream } from "./copilot";
 
 // Loaded once at module initialisation — cached by skillLoader, so disk I/O is a one-time cost.
 const _PRD_AGENT_RULES = getPrdAgentRulesForChat();
-const _PRD_CANONICAL_TEMPLATE = loadTemplate("PRD/PRD-{product-name-kebab-case}.md");
 
 export class TemplateValidationError extends Error {
   missingHeadings: string[];
@@ -45,7 +44,7 @@ export function validatePrdTemplateCompliance(html: string): {
   ok: boolean;
   missingHeadings: string[];
 } {
-  const expected = extractCanonicalPrdHeadings(_PRD_CANONICAL_TEMPLATE);
+  const expected = extractCanonicalPrdHeadings(loadTemplate("PRD/PRD-{product-name-kebab-case}.md"));
   const actualNormalized = new Set(extractHtmlHeadings(html).map(normalizeHeading));
   const missingHeadings = expected.filter((heading) => !actualNormalized.has(normalizeHeading(heading)));
   return { ok: missingHeadings.length === 0, missingHeadings };
@@ -170,6 +169,12 @@ Your role:
 - Maintain traceability between artifacts
 
 When generating artifacts, use clear headings, structured sections, and professional enterprise language. Be thorough but concise.
+
+CRITICAL — Names and roles:
+- Never invent or fabricate personal names (authors, stakeholders, approvers, owners, personas).
+- Preserve existing names exactly when explicitly provided by the user, project context, uploaded documents, or current artifact.
+- If a name is unknown or missing, use role-only labels (e.g., "Product Manager", "Engineering Lead", "Compliance Officer").
+- Do not copy sample/example names from templates unless they are explicitly present in the project context.
 
 CRITICAL — Output Size:
 NEVER claim the output is "too large" or "exceeds token limits". NEVER offer to split into multiple parts or ask the user to choose between options about output size. Always produce the FULL document in a single response. If the content is extensive, write it all — do not truncate or refuse.
@@ -946,7 +951,10 @@ export async function generateArtifact(
     const rawContent = type === "prd"
       ? await generatePrdWithQualityGates(userPrompt, projectContext, preferredModel)
       : await callArtifactDirectly(userPrompt, preferredModel);
-    const content = type === "avd" ? ensureAvdMermaidDiagrams(rawContent) : rawContent;
+    const content = applyArtifactWatermark(
+      type,
+      type === "avd" ? ensureAvdMermaidDiagrams(rawContent) : rawContent
+    );
     return {
       content,
       metadata: {
@@ -1021,7 +1029,10 @@ UPDATE INSTRUCTIONS (MANDATORY):
 `;
 
   const rawContent = await callArtifactDirectly(refinementPrompt);
-  const content = params.artifactType === "avd" ? ensureAvdMermaidDiagrams(rawContent) : rawContent;
+  const content = applyArtifactWatermark(
+    params.artifactType,
+    params.artifactType === "avd" ? ensureAvdMermaidDiagrams(rawContent) : rawContent
+  );
   return {
     content,
     metadata: {

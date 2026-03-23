@@ -8,6 +8,7 @@ import { evaluateArtifactQuality } from "@/lib/artifactChecks";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { buildGenerationContext } from "@/lib/contextBudget";
+import { applyArtifactWatermark } from "@/lib/skillLoader";
 
 /** Format stakeholders JSON into a context block for the AI prompt. */
 function formatStakeholders(raw: string | null | undefined): string {
@@ -180,24 +181,27 @@ export async function PUT(
 
   // Regular update
   const updateData: Record<string, unknown> = {};
-  if (body.content !== undefined) updateData.content = body.content;
+  const nextContent = body.content !== undefined
+    ? applyArtifactWatermark(artifact.type as ArtifactType, body.content)
+    : undefined;
+  if (nextContent !== undefined) updateData.content = nextContent;
   if (body.status !== undefined) updateData.status = body.status;
   if (body.title !== undefined) updateData.title = body.title;
 
   // When submitting for approval, always re-score quality on the submitted content.
   if (body.status === "awaiting_approval") {
-    const contentToScore: string = body.content ?? artifact.content ?? "";
+    const contentToScore: string = nextContent ?? artifact.content ?? "";
     const quality = evaluateArtifactQuality(artifact.type as ArtifactType, contentToScore);
     updateData.confidenceScore = quality.confidenceScore;
   }
 
   // When content changes, save current content as a version snapshot before updating
-  if (body.content !== undefined && body.content !== artifact.content) {
+  if (nextContent !== undefined && nextContent !== artifact.content) {
     await saveVersionSnapshot(artifactId, artifact.content, artifact.version);
     updateData.version = { increment: 1 };
     // If we already re-scored for submission, keep that value; otherwise score now.
     if (updateData.confidenceScore === undefined) {
-      const quality = evaluateArtifactQuality(artifact.type as ArtifactType, body.content);
+      const quality = evaluateArtifactQuality(artifact.type as ArtifactType, nextContent);
       updateData.confidenceScore = quality.confidenceScore;
     }
   }

@@ -175,24 +175,6 @@ export function ArtifactEditor({ content, onChange, editable = true }: ArtifactE
     [editor]
   );
 
-  const insertSystemContextDiagram = useCallback(() => {
-    if (!editor) return;
-    // Use <pre class="mermaid"> — matched by MermaidBlock Rule 1 (pre.mermaid, priority 1001)
-    const diagramCode = `graph TD
-  User[End User] --> App[Product System]
-  App --> IdP[Identity Provider]
-  App --> DB[(Primary Database)]
-  App --> Ext[External Service]`;
-
-    editor
-      .chain()
-      .focus()
-      .insertContent(
-        `<h2>System Context Diagram</h2><pre class="mermaid">${escapeHtml(diagramCode)}</pre><p></p>`
-      )
-      .run();
-  }, [editor]);
-
   if (!editor) return null;
 
   const wordCount = editor.storage.characterCount?.words?.() ?? 
@@ -385,19 +367,6 @@ export function ArtifactEditor({ content, onChange, editable = true }: ArtifactE
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="16,18 22,12 16,6" />
             <polyline points="8,6 2,12 8,18" />
-          </svg>
-        </ToolbarButton>
-
-        {/* Mermaid System Context Diagram */}
-        <ToolbarButton
-          onClick={insertSystemContextDiagram}
-          title="Insert System Context Diagram (Mermaid)"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="4" width="7" height="4" rx="1" />
-            <rect x="14" y="4" width="7" height="4" rx="1" />
-            <rect x="8.5" y="16" width="7" height="4" rx="1" />
-            <path d="M10 6h4M17.5 8v3M6.5 8v3M12 11v5" />
           </svg>
         </ToolbarButton>
 

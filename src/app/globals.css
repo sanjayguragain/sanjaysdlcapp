@@ -2,6 +2,12 @@
 @import "tailwindcss";
 
 @theme {
+  /* Edison Brand — Core neutrals */
+  --color-edison-dark: #101820;
+  --color-edison-light: #b1b3b3;
+  --color-edison-mid-gray: #53565a;
+  --color-edison-light-gray: #707372;
+
   /* Edison Brand — Orange primary scale */
   --color-edison-50: #fef5ee;
   --color-edison-100: #fde8d4;
@@ -25,6 +31,13 @@
   --color-edison-blue-700: #00739e;
   --color-edison-blue-800: #066082;
   --color-edison-blue-900: #0b506c;
+
+  /* Edison Brand — Additional accents */
+  --color-edison-green: #658d1b;
+  --color-edison-aqua: #006269;
+  --color-edison-yellow: #f0b323;
+  --color-edison-red: #722257;
+  --color-edison-yellow-green: #d2d755;
 }
 
 :root {
@@ -41,6 +54,9 @@
   --success: #658D1B;
   --warning: #F0B323;
   --danger: #722257;
+  --tertiary: #658D1B;
+  --aqua: #006269;
+  --yellow-green: #D2D755;
 }
 
 * {
