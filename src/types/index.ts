@@ -76,7 +76,7 @@ export const ARTIFACT_DEFINITIONS: ArtifactDefinition[] = [
   },
   {
     type: "preliminary_estimation",
-    label: "Preliminary Estimation",
+    label: "ROM Estimation",
     owner: "Product Manager",
     approver: "Product Manager",
     description: "Initial effort and schedule estimate",

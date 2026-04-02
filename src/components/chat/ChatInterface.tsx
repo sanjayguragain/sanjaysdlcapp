@@ -22,16 +22,24 @@ interface Message {
   metadata?: string | null;
 }
 
+interface QuickReplyOption {
+  label: string;
+  value: string;
+}
+
 interface ChatInterfaceProps {
   projectId: string;
   messages: Message[];
   onSendMessage: (content: string) => Promise<void>;
+  onQuickReply?: (value: string) => Promise<void> | void;
+  quickReplies?: QuickReplyOption[];
   onGenerateArtifact: (type: ArtifactType) => Promise<void>;
   sdlcMode?: "modern" | "traditional";
   isLoading: boolean;
   documents?: Document[];
   onDocumentUploaded?: (doc: Document) => void;
   onDocumentDeleted?: (id: string) => void;
+  existingArtifactTypes?: ArtifactType[];
 }
 
 const MODERN_QUICK_ACTIONS = [
@@ -66,7 +74,20 @@ function sanitizeAssistantForChat(content: string): string {
   if (!content) return content;
 
   // Remove internal control marker if present.
-  const cleaned = content.replace(new RegExp(QA_DONE_MARKER, "g"), "").trim();
+  let cleaned = content.replace(new RegExp(QA_DONE_MARKER, "g"), "").trim();
+
+  // Strip any trailing JSON confidence/review blocks the model may append.
+  // Matches patterns like: ```json\n{ ... }\n``` or ```\n{ ... }\n```
+  cleaned = cleaned.replace(/\n*`{2,}(?:json)?\s*\n\s*\{[\s\S]*?\}\s*\n`{2,}/g, "").trim();
+  // Also strip a trailing "Confidence & review flag" label line that precedes such blocks.
+  cleaned = cleaned.replace(/\n*Confidence\s*[&and]+\s*review\s*flag[^\n]*\n*/gi, "").trim();
+
+  // Strip replayed Q&A history: the model sometimes prepends all prior Q&A separated by
+  // "---" lines before giving the actual answer. Keep only the last "---" segment.
+  const qaSegments = cleaned.split(/\n\s*---+\s*\n/);
+  if (qaSegments.length > 1) {
+    cleaned = qaSegments[qaSegments.length - 1].trim();
+  }
 
   // If an artifact payload is present, keep only user-facing text around delimiters.
   const startIdx = cleaned.indexOf(ARTIFACT_DELIM_START);
@@ -92,12 +113,15 @@ export function ChatInterface({
   projectId,
   messages,
   onSendMessage,
+  onQuickReply,
+  quickReplies = [],
   onGenerateArtifact,
   sdlcMode = "modern",
   isLoading,
   documents = [],
   onDocumentUploaded,
   onDocumentDeleted,
+  existingArtifactTypes = [],
 }: ChatInterfaceProps) {
   const [input, setInput] = useState("");
   const [showArtifactMenu, setShowArtifactMenu] = useState(false);
@@ -204,21 +228,30 @@ export function ChatInterface({
 
           {showArtifactMenu && (
             <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-10">
-              {artifactMenuItems.map((def) => (
-                <button
-                  key={def.type}
-                  onClick={() => {
-                    onGenerateArtifact(def.type);
-                    setShowArtifactMenu(false);
-                  }}
-                  className="w-full text-left px-4 py-2.5 hover:bg-gray-50 transition-colors"
-                >
-                  <p className="text-sm font-medium text-gray-800">
-                    {def.label}
-                  </p>
-                  <p className="text-xs text-gray-500">{def.description}</p>
-                </button>
-              ))}
+              {artifactMenuItems.map((def) => {
+                const isGenerated = existingArtifactTypes.includes(def.type);
+                return (
+                  <button
+                    key={def.type}
+                    onClick={() => {
+                      onGenerateArtifact(def.type);
+                      setShowArtifactMenu(false);
+                    }}
+                    className="w-full text-left px-4 py-2.5 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium text-gray-800">{def.label}</p>
+                      {isGenerated && (
+                        <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                          Generated
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500">{def.description}</p>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -323,6 +356,27 @@ export function ChatInterface({
         className="px-4 pt-3 bg-white border-t border-gray-200"
         style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
       >
+        {quickReplies.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {quickReplies.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                disabled={isLoading}
+                onClick={() => {
+                  if (onQuickReply) {
+                    void onQuickReply(option.value);
+                  } else {
+                    void onSendMessage(option.value);
+                  }
+                }}
+                className="px-3 py-1.5 text-xs font-medium rounded-full border border-edison-200 text-edison-700 bg-edison-50 hover:bg-edison-100 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="flex items-center gap-3">
           <div className="flex-1 relative">
             <textarea

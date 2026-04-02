@@ -666,7 +666,7 @@ export function ArtifactSidePanel({
             <button
               onClick={() => void onSyncFeedback()}
               disabled={isSyncingFeedback}
-              title="Update PRD using Cyber Risk Analysis, Compliance Report, and Quality Review artifacts"
+              title="Incorporate findings, recommendations, and feedback from related project documents and reports"
               className="px-3 py-1.5 text-xs font-medium rounded-md border border-emerald-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
             >
               {isSyncingFeedback ? (
@@ -675,14 +675,15 @@ export function ArtifactSidePanel({
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 100 16v-4l-3 3 3 3v-4a8 8 0 01-8-8z" />
                   </svg>
-                  Syncing Reports…
+                  Syncing findings…
                 </>
               ) : (
                 <>
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 5h16M4 12h16M4 19h16M9 5v14m6-14v14" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m7.528-4.528a9 9 0 11-18.528 0m18.528 0l-3.464-3.464" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 10.5h-3m3 6h-3m9.5-1.5h3" />
                   </svg>
-                  Sync From Reports
+                  Sync findings & feedback
                 </>
               )}
             </button>

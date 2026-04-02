@@ -18,6 +18,88 @@ interface Message {
   metadata?: string | null;
 }
 
+function extractHeadingNames(content: string): string[] {
+  if (!content) return [];
+  const headings: string[] = [];
+
+  const htmlHeadings = Array.from(content.matchAll(/<h[1-6]\b[^>]*>([\s\S]*?)<\/h[1-6]>/gi));
+  for (const m of htmlHeadings) {
+    const name = (m[1] || "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+    if (name) headings.push(name);
+  }
+
+  const mdHeadings = Array.from(content.matchAll(/^#{1,6}\s+(.+)$/gim));
+  for (const m of mdHeadings) {
+    const name = (m[1] || "").replace(/\s+/g, " ").trim();
+    if (name) headings.push(name);
+  }
+
+  return headings;
+}
+
+function escapeRegExp(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function replaceSectionByHeading(existing: string, incoming: string, heading: string): string {
+  const escaped = escapeRegExp(heading);
+  const htmlSection = new RegExp(
+    `<h[1-6]\\b[^>]*>\\s*${escaped}\\s*<\\/h[1-6]>([\\s\\S]*?)(?=<h[1-6]\\b|$)`,
+    "i"
+  );
+  if (htmlSection.test(existing)) {
+    return existing.replace(htmlSection, incoming);
+  }
+
+  const mdSection = new RegExp(
+    `^#{1,6}\\s+${escaped}\\s*$([\\s\\S]*?)(?=^#{1,6}\\s+|$)`,
+    "im"
+  );
+  if (mdSection.test(existing)) {
+    return existing.replace(mdSection, incoming);
+  }
+
+  return `${existing.trimEnd()}\n\n${incoming.trim()}`;
+}
+
+function mergeArtifactContent(existing: string, incoming: string): string {
+  if (!existing) return incoming;
+  if (!incoming) return existing;
+
+  const existingTrim = existing.trim();
+  const incomingTrim = incoming.trim();
+  if (!incomingTrim) return existing;
+
+  const existingHeadings = extractHeadingNames(existingTrim);
+  const incomingHeadings = extractHeadingNames(incomingTrim);
+
+  const clearlyPartial =
+    incomingTrim.length < Math.max(500, Math.floor(existingTrim.length * 0.8)) ||
+    (existingHeadings.length >= 3 && incomingHeadings.length > 0 && incomingHeadings.length < existingHeadings.length);
+
+  if (!clearlyPartial) return incomingTrim;
+
+  if (incomingHeadings.length === 0) {
+    return `${existingTrim}\n\n${incomingTrim}`;
+  }
+
+  let merged = existingTrim;
+  let changed = false;
+  for (const heading of incomingHeadings) {
+    const sectionRegex = new RegExp(
+      `<h[1-6]\\b[^>]*>\\s*${escapeRegExp(heading)}\\s*<\\/h[1-6]>([\\s\\S]*?)(?=<h[1-6]\\b|$)`,
+      "i"
+    );
+    const sectionMatch = incomingTrim.match(sectionRegex);
+    const incomingSection = sectionMatch ? sectionMatch[0].trim() : incomingTrim;
+    const next = replaceSectionByHeading(merged, incomingSection, heading);
+    if (next !== merged) changed = true;
+    merged = next;
+  }
+
+  return changed ? merged : `${existingTrim}\n\n${incomingTrim}`;
+}
+
 interface Project {
   id: string;
   name: string;
@@ -39,6 +121,11 @@ interface FeedbackSyncSummary {
   after: { overallScore: number; recommendations: number; blockers: number };
   delta: { overallScore: number; recommendations: number; blockers: number };
 }
+
+type CompletionChoiceState = {
+  artifactId: string;
+  artifactTitle: string;
+};
 
 const TRADITIONAL_DOC_PROMPTS: Record<string, { label: string; prompt: string }> = {
   brd: {
@@ -77,11 +164,14 @@ export default function ProjectChatPage() {
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [lastRequestedArtifactType, setLastRequestedArtifactType] = useState<ArtifactType | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [generatedArtifactTypes, setGeneratedArtifactTypes] = useState<ArtifactType[]>([]);
+  const [pendingCompletionChoice, setPendingCompletionChoice] = useState<CompletionChoiceState | null>(null);
   // Guided Q&A state — tracks which artifact we're answering questions for
   // and whether the user has replied in this Q&A round.
   const [qaMode, setQaMode] = useState<{ artifactId: string; hasUserResponse: boolean } | null>(null);
   const qaModeRef = useRef<{ artifactId: string; hasUserResponse: boolean } | null>(null);
   const qaTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const autofillTriggerRef = useRef<(() => Promise<void>) | null>(null);
   const traditionalSeedTriggeredRef = useRef(false);
   const sdlcMode: "modern" | "traditional" =
     searchParams.get("sdlcMode") === "traditional"
@@ -90,13 +180,71 @@ export default function ProjectChatPage() {
       ? "traditional"
       : "modern";
 
+  const artifactNeedsClarification = (content: string) =>
+    /\[To be confirmed/i.test(content);
+
+  const promptForCompletionChoice = useCallback((artifactId: string, artifactTitle: string) => {
+    setPendingCompletionChoice({ artifactId, artifactTitle });
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: "completion-choice-" + Date.now(),
+        role: "assistant",
+        content:
+          `Would you like to complete **${artifactTitle}** using industry best practices automatically, or answer clarifying questions?\n\n` +
+          `Reply with:\n` +
+          `1) Autofill with industry best practices\n` +
+          `2) Answer clarifying questions`,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+  }, []);
+
+  const startClarifyingQuestions = useCallback(async (artifactId: string) => {
+    setIsLoading(true);
+    try {
+      const qRes = await fetch(`/api/projects/${projectId}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clarifyArtifact: true, artifactId }),
+      });
+
+      if (!qRes.ok) return;
+      const qData = await qRes.json();
+      if (qData.assistantMessage) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: qData.assistantMessage.id,
+            role: "assistant",
+            content: qData.assistantMessage.content,
+            createdAt: qData.assistantMessage.createdAt,
+          },
+        ]);
+
+        if (qData.assistantMessage.content.includes("**Q1.**")) {
+          setQaMode({ artifactId, hasUserResponse: false });
+          if (qaTimerRef.current) {
+            clearTimeout(qaTimerRef.current);
+            qaTimerRef.current = null;
+          }
+        }
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIsLoading(false);
+    }
+  }, [projectId]);
+
   useEffect(() => {
     async function load() {
       try {
-        const [projRes, chatRes, docsRes] = await Promise.all([
+        const [projRes, chatRes, docsRes, artifactsRes] = await Promise.all([
           fetch(`/api/projects/${projectId}`),
           fetch(`/api/projects/${projectId}/chat`),
           fetch(`/api/projects/${projectId}/documents`),
+          fetch(`/api/projects/${projectId}/artifacts`),
         ]);
         if (projRes.ok) {
           const data = await projRes.json();
@@ -109,6 +257,12 @@ export default function ProjectChatPage() {
         if (docsRes.ok) {
           const data = await docsRes.json();
           setDocuments(data.documents || []);
+        }
+        if (artifactsRes.ok) {
+          const data = await artifactsRes.json();
+          setGeneratedArtifactTypes(
+            (data.artifacts || []).map((a: { type: ArtifactType }) => a.type)
+          );
         }
       } catch {
         // ignore
@@ -210,47 +364,22 @@ export default function ProjectChatPage() {
               status: data.status,
               confidenceScore: data.confidenceScore,
             });
+            const needsClarification = artifactNeedsClarification(data.content);
             setMessages((prev) => [
               ...prev,
               {
                 id: "auto-gen-done",
                 role: "assistant",
-                content: `Your **${data.title}** has been generated based on your uploaded documents. Review it in the panel on the right and ask me to refine any section.`,
+                content: needsClarification
+                  ? `Your **${data.title}** has been generated based on your uploaded documents. Review it in the panel on the right and choose how you'd like to complete it.`
+                  : `Your **${data.title}** has been generated. Review it in the panel on the right.`,
                 createdAt: new Date().toISOString(),
                 metadata: JSON.stringify({ isArtifact: true, artifactId: data.id }),
               },
             ]);
-            // Ask clarifying questions without a user message visible in the chat
-            fetch(`/api/projects/${projectId}/chat`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ clarifyArtifact: true, artifactId: data.id }),
-            })
-              .then(async (qRes) => {
-                if (qRes.ok) {
-                  const qData = await qRes.json();
-                  if (qData.assistantMessage) {
-                    setMessages((prev) => [
-                      ...prev,
-                      {
-                        id: qData.assistantMessage.id,
-                        role: "assistant",
-                        content: qData.assistantMessage.content,
-                        createdAt: qData.assistantMessage.createdAt,
-                      },
-                    ]);
-                    // Enter Q&A mode, but only arm idle rebuild after the user answers.
-                    if (qData.assistantMessage.content.includes("**Q1.**")) {
-                      setQaMode({ artifactId: data.id, hasUserResponse: false });
-                      if (qaTimerRef.current) {
-                        clearTimeout(qaTimerRef.current);
-                        qaTimerRef.current = null;
-                      }
-                    }
-                  }
-                }
-              })
-              .catch(() => {});
+            if (needsClarification) {
+              promptForCompletionChoice(data.id, data.title);
+            }
           }
         })
         .catch(() => {})
@@ -262,7 +391,7 @@ export default function ProjectChatPage() {
     }, 500);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, searchParams]);
+  }, [projectId, searchParams, promptForCompletionChoice]);
 
   // ── Rebuild artifact with all collected answers ──────────────────────────
   const triggerRebuild = useCallback(async (artifactId: string) => {
@@ -300,10 +429,11 @@ export default function ProjectChatPage() {
       return [pre, post].filter(Boolean).join("\n\n") || "The document has been updated.";
     };
     const applyRebuildUpdate = (newContent: string) => {
-      setActiveArtifact((prev) => prev ? { ...prev, content: newContent } : null);
+      const mergedContent = newContent;
+      setActiveArtifact((prev) => prev ? { ...prev, content: mergedContent } : null);
       fetch(`/api/projects/${projectId}/artifacts?artifactId=${artifactId}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newContent }),
+        body: JSON.stringify({ content: mergedContent }),
       }).then((r) => r.ok ? r.json() : null).then((data) => {
         if (data) {
           setActiveArtifact((prev) =>
@@ -372,6 +502,44 @@ export default function ProjectChatPage() {
 
   const handleSendMessage = useCallback(
     async (content: string) => {
+      const trimmed = content.trim();
+
+      // First-time artifact completion choice flow.
+      if (pendingCompletionChoice && activeArtifact && pendingCompletionChoice.artifactId === activeArtifact.id) {
+        const userMsg: Message = {
+          id: "choice-user-" + Date.now(),
+          role: "user",
+          content,
+          createdAt: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, userMsg]);
+
+        const normalized = trimmed.toLowerCase();
+        const choseAutofill =
+          normalized === "1" ||
+          /autofill|best\s*practice|industry\s*best\s*practice|auto\s*fill/.test(normalized);
+        const choseQuestions =
+          normalized === "2" ||
+          /question|clarify|q&a|qa|answer/.test(normalized);
+
+        if (choseAutofill) {
+          setPendingCompletionChoice(null);
+          if (autofillTriggerRef.current) {
+            await autofillTriggerRef.current();
+          }
+          return;
+        }
+
+        if (choseQuestions) {
+          setPendingCompletionChoice(null);
+          await startClarifyingQuestions(activeArtifact.id);
+          return;
+        }
+
+        // Unrecognised input — dismiss the choice dialog and fall through to normal chat
+        setPendingCompletionChoice(null);
+      }
+
       const tempUserId = "temp-user-" + Date.now();
       const tempMsg: Message = {
         id: tempUserId,
@@ -401,7 +569,14 @@ export default function ProjectChatPage() {
 
       try {
         const body: Record<string, unknown> = { content };
-        if (activeArtifact) body.artifactId = activeArtifact.id;
+        if (qaMode && activeArtifact) {
+          // Q&A mode: answering clarifying questions about the artifact
+          body.artifactId = activeArtifact.id;
+          body.editArtifact = false;
+        } else if (activeArtifact) {
+          // Artifact is open but user is asking a general question — inject full artifact as read context
+          body.viewingArtifactId = activeArtifact.id;
+        }
 
         const res = await fetch(`/api/projects/${projectId}/chat`, {
           method: "POST",
@@ -457,11 +632,12 @@ export default function ProjectChatPage() {
         // Apply extracted artifact content to the side panel and save
         const applyArtifactUpdate = (artifactContent: string) => {
           if (!activeArtifact) return;
-          setActiveArtifact((prev) => prev ? { ...prev, content: artifactContent } : null);
+          const mergedContent = artifactContent;
+          setActiveArtifact((prev) => prev ? { ...prev, content: mergedContent } : null);
           fetch(`/api/projects/${projectId}/artifacts?artifactId=${activeArtifact.id}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content: artifactContent }),
+            body: JSON.stringify({ content: mergedContent }),
           }).then((r) => r.ok ? r.json() : null).then((data) => {
             if (data) {
               setActiveArtifact((prev) =>
@@ -554,7 +730,7 @@ export default function ProjectChatPage() {
         setIsLoading(false);
       }
     },
-    [projectId, activeArtifact, qaMode, triggerRebuild]
+    [projectId, activeArtifact, qaMode, triggerRebuild, pendingCompletionChoice, startClarifyingQuestions]
   );
 
   const handleGenerateArtifact = useCallback(
@@ -598,6 +774,9 @@ export default function ProjectChatPage() {
               status: data.status,
               confidenceScore: data.confidenceScore,
             });
+            setGeneratedArtifactTypes((prev) =>
+              prev.includes(data.type as ArtifactType) ? prev : [...prev, data.type as ArtifactType]
+            );
             const notifMsg: Message = {
               id: "notif-" + Date.now(),
               role: "assistant",
@@ -609,39 +788,9 @@ export default function ProjectChatPage() {
             };
             setMessages((prev) => [...prev, notifMsg]);
 
-            // For newly generated artifacts, kick off guided Q&A (ask first batch of questions)
-            if (res.ok) {
-              fetch(`/api/projects/${projectId}/chat`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ clarifyArtifact: true, artifactId: data.id }),
-              })
-                .then(async (qRes) => {
-                  if (qRes.ok) {
-                    const qData = await qRes.json();
-                    if (qData.assistantMessage) {
-                      setMessages((prev) => [
-                        ...prev,
-                        {
-                          id: qData.assistantMessage.id,
-                          role: "assistant",
-                          content: qData.assistantMessage.content,
-                          createdAt: qData.assistantMessage.createdAt,
-                        },
-                      ]);
-                      // Enter Q&A mode, but wait for a user response before
-                      // starting the idle rebuild timer.
-                      if (qData.assistantMessage.content.includes("**Q1.**")) {
-                        setQaMode({ artifactId: data.id, hasUserResponse: false });
-                        if (qaTimerRef.current) {
-                          clearTimeout(qaTimerRef.current);
-                          qaTimerRef.current = null;
-                        }
-                      }
-                    }
-                  }
-                })
-                .catch(() => {});
+            // Only prompt if the artifact has unresolved placeholders.
+            if (res.ok && artifactNeedsClarification(data.content)) {
+              promptForCompletionChoice(data.id, data.title);
             }
           } else {
             setGenerationError(`Could not load the ${type.toUpperCase()} artifact after generation. Please retry.`);
@@ -682,7 +831,7 @@ export default function ProjectChatPage() {
         setGeneratingArtifactType(null);
       }
     },
-    [projectId, triggerRebuild]
+    [projectId, triggerRebuild, promptForCompletionChoice]
   );
 
   // Seed traditional drafting prompt when coming from the Traditional SDLC chooser.
@@ -818,7 +967,30 @@ export default function ProjectChatPage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ autofillArtifact: true, artifactId: activeArtifact.id }),
       });
-      if (!res.ok || !res.body) { setMessages((prev) => prev.filter((m) => m.id !== placeholderId)); return; }
+      if (!res.ok) {
+        let errMsg = "Autofill failed. Please try again.";
+        try {
+          const data = await res.json();
+          if (data?.error) errMsg = String(data.error);
+        } catch {
+          // ignore parse errors
+        }
+        setMessages((prev) => prev.map((m) =>
+          m.id === placeholderId
+            ? { ...m, content: `Autofill could not be completed: ${errMsg}` }
+            : m
+        ));
+        return;
+      }
+
+      if (!res.body) {
+        setMessages((prev) => prev.map((m) =>
+          m.id === placeholderId
+            ? { ...m, content: "Autofill did not return a response stream. Please retry." }
+            : m
+        ));
+        return;
+      }
 
       const ct = res.headers.get("Content-Type") ?? "";
       if (ct.includes("text/event-stream")) {
@@ -863,7 +1035,23 @@ export default function ProjectChatPage() {
                   );
                 } else if (artifactContent) {
                   void applyAutofillUpdate(artifactContent);
+                } else {
+                  setMessages((prev) => prev.map((m) =>
+                    m.id === placeholderId
+                      ? {
+                          ...m,
+                          content: "Autofill completed but no document updates were returned. This usually means the AI provider is not configured or returned non-updatable output.",
+                        }
+                      : m
+                  ));
                 }
+              }
+              if (parsed.error) {
+                setMessages((prev) => prev.map((m) =>
+                  m.id === placeholderId
+                    ? { ...m, content: "Autofill failed while streaming. Please retry." }
+                    : m
+                ));
               }
             } catch { /* ignore */ }
           }
@@ -886,14 +1074,31 @@ export default function ProjectChatPage() {
           );
         } else if (artifactContent) {
           void applyAutofillUpdate(artifactContent);
+        } else {
+          setMessages((prev) => prev.map((m) =>
+            m.id === placeholderId
+              ? {
+                  ...m,
+                  content: "Autofill completed but did not return updated artifact content. Please verify AI provider configuration and retry.",
+                }
+              : m
+          ));
         }
       }
     } catch {
-      setMessages((prev) => prev.filter((m) => m.id !== placeholderId));
+      setMessages((prev) => prev.map((m) =>
+        m.id === placeholderId
+          ? { ...m, content: "Autofill request failed due to a network/server error. Please retry." }
+          : m
+      ));
     } finally {
       setIsAutofilling(false);
     }
   }, [projectId, activeArtifact, handleSaveArtifact]);
+
+  useEffect(() => {
+    autofillTriggerRef.current = handleAutofillArtifact;
+  }, [handleAutofillArtifact]);
 
   const handleSyncFeedback = useCallback(async () => {
     if (!activeArtifact || activeArtifact.type !== "prd") return;
@@ -948,7 +1153,7 @@ export default function ProjectChatPage() {
       const sourcesText = summary.sourceArtifacts
         .map((s) => `${s.title} (${s.type.replace(/_/g, " ")})`)
         .join(", ");
-      const msg = `PRD sync from reports completed. Sources: ${sourcesText}. Overall quality ${summary.before.overallScore} -> ${summary.after.overallScore} (${deltaText}). Recommendations ${summary.before.recommendations} -> ${summary.after.recommendations}, blockers ${summary.before.blockers} -> ${summary.after.blockers}.`;
+      const msg = `PRD feedback import completed. Sources: ${sourcesText}. Overall quality ${summary.before.overallScore} -> ${summary.after.overallScore} (${deltaText}). Recommendations ${summary.before.recommendations} -> ${summary.after.recommendations}, blockers ${summary.before.blockers} -> ${summary.after.blockers}.`;
       setMessages((prev) => prev.map((m) => (m.id === infoId ? { ...m, content: msg } : m)));
     } catch {
       setMessages((prev) => prev.map((m) =>
@@ -1032,6 +1237,14 @@ export default function ProjectChatPage() {
     };
   }, [projectId, activeArtifact]);
 
+  const completionChoiceQuickReplies =
+    pendingCompletionChoice && activeArtifact && pendingCompletionChoice.artifactId === activeArtifact.id
+      ? [
+          { label: "Autofill Best Practices", value: "1" },
+          { label: "Answer Clarifying Questions", value: "2" },
+        ]
+      : [];
+
   const showSidePanel = activeArtifact !== null || isGeneratingArtifact || generationError !== null;
 
   return (
@@ -1082,12 +1295,15 @@ export default function ProjectChatPage() {
               projectId={projectId}
               messages={messages}
               onSendMessage={handleSendMessage}
+              onQuickReply={handleSendMessage}
+              quickReplies={completionChoiceQuickReplies}
               onGenerateArtifact={handleGenerateArtifact}
               sdlcMode={sdlcMode}
               isLoading={isLoading}
               documents={documents}
               onDocumentUploaded={(doc) => setDocuments((prev) => [...prev, doc])}
               onDocumentDeleted={(id) => setDocuments((prev) => prev.filter((d) => d.id !== id))}
+              existingArtifactTypes={generatedArtifactTypes}
             />
           </div>
         </div>

@@ -4,6 +4,7 @@ import { isCopilotSdkEnabled, copilotSendAndWait, copilotStream } from "./copilo
 
 // Loaded once at module initialisation — cached by skillLoader, so disk I/O is a one-time cost.
 const _PRD_AGENT_RULES = getPrdAgentRulesForChat();
+const _PRD_CANONICAL_TEMPLATE = loadTemplate("PRD/PRD-{product-name-kebab-case}.md");
 
 export class TemplateValidationError extends Error {
   missingHeadings: string[];
@@ -48,6 +49,65 @@ export function validatePrdTemplateCompliance(html: string): {
   const actualNormalized = new Set(extractHtmlHeadings(html).map(normalizeHeading));
   const missingHeadings = expected.filter((heading) => !actualNormalized.has(normalizeHeading(heading)));
   return { ok: missingHeadings.length === 0, missingHeadings };
+}
+
+function validatePrdRequiredFields(html: string): {
+  ok: boolean;
+  missingFields: string[];
+} {
+  const missingFields: string[] = [];
+  if (!/(?:<strong>\s*)?Date\s*:(?:\s*<\/strong>)?/i.test(html)) {
+    missingFields.push("Date in Document Information & Revision History");
+  }
+  if (!/(?:<strong>\s*)?Author\s*:(?:\s*<\/strong>)?/i.test(html)) {
+    missingFields.push("Author in Document Information & Revision History");
+  }
+  if (!/Traceability Matrix/i.test(html)) {
+    missingFields.push("Traceability Matrix section/table");
+  }
+  return { ok: missingFields.length === 0, missingFields };
+}
+
+function ensurePrdDateAndAuthor(html: string, authorName: string, createdDate: string): string {
+  // Match heading with literal `&`, HTML entity `&amp;`, or the word `and`
+  const headingRegex = /<h2\b[^>]*>\s*Document Information\s*(?:&amp;|&|and)\s*Revision History\s*<\/h2>/i;
+
+  const dateLine = `<p><strong>Date:</strong> ${createdDate}</p>`;
+  const authorLine = `<p><strong>Author:</strong> ${authorName}</p>`;
+
+  const headingMatch = headingRegex.exec(html);
+  if (!headingMatch) {
+    // Heading not found — prepend a Document Information section so author/date are never silently dropped.
+    const infoSection =
+      `<h2>Document Information &amp; Revision History</h2>\n${dateLine}\n${authorLine}\n`;
+    const firstHeading = /<h[1-6]\b/i.exec(html);
+    if (firstHeading) {
+      return html.slice(0, firstHeading.index) + infoSection + html.slice(firstHeading.index);
+    }
+    return infoSection + html;
+  }
+
+  const nextH2Regex = /<h2\b[^>]*>/gi;
+  const sectionStart = headingMatch.index + headingMatch[0].length;
+  nextH2Regex.lastIndex = sectionStart;
+  const nextHeading = nextH2Regex.exec(html);
+  const sectionEnd = nextHeading ? nextHeading.index : html.length;
+
+  let section = html.slice(sectionStart, sectionEnd);
+
+  if (/(?:<strong>\s*)?Date\s*:(?:\s*<\/strong>)?/i.test(section)) {
+    section = section.replace(/<p[^>]*>[\s\S]*?(?:<strong>\s*)?Date\s*:(?:\s*<\/strong>)?[\s\S]*?<\/p>/i, dateLine);
+  } else {
+    section += `\n${dateLine}`;
+  }
+
+  if (/(?:<strong>\s*)?Author\s*:(?:\s*<\/strong>)?/i.test(section)) {
+    section = section.replace(/<p[^>]*>[\s\S]*?(?:<strong>\s*)?Author\s*:(?:\s*<\/strong>)?[\s\S]*?<\/p>/i, authorLine);
+  } else {
+    section += `\n${authorLine}`;
+  }
+
+  return `${html.slice(0, sectionStart)}${section}${html.slice(sectionEnd)}`;
 }
 
 /** Detect Azure reasoning models (o-series) that don't support temperature. */
@@ -167,6 +227,46 @@ Your role:
 - Identify gaps, risks, and dependencies
 - Provide confidence scores for generated content
 - Maintain traceability between artifacts
+- Engage in general conversation about SDLC topics, project questions, and documentation advice
+
+SCOPE AND TOPIC BOUNDARIES:
+You are here to help with:
+- SDLC (Software Development Life Cycle) topics and best practices
+- Product requirements and documentation (PRDs, BRDs, SRS, etc.)
+- Risk analysis, security, and compliance
+- Testing, deployment, and operational readiness
+- Project management, timelines, and stakeholder communication
+- Team collaboration, roles, and responsibilities
+- Architecture, design, and technical decision-making
+- This platform's features and how to use them
+- General business strategy and product thinking related to enterprise software
+- Quality assessment and improvement
+
+You should POLITELY DECLINE and refocus the conversation if the user asks about topics that are completely outside these areas, such as:
+- Unrelated personal advice, life coaching, or psychology
+- Cooking, recipes, food, or nutrition
+- Sports, entertainment, celebrity gossip, or pop culture
+- Homework or test answers for non-SDLC subjects
+- Creative writing unrelated to documentation
+- Technical topics completely unrelated to software development/SDLC
+- Medical, legal, or financial advice
+- Random trivia or facts with no connection to work
+
+RESPONSE for off-topic questions:
+When you encounter a completely off-topic question, respond with something like:
+"I'm designed to help with SDLC documentation, project planning, and enterprise software strategy. I can't help with [topic]. Is there anything about your project, documentation, or SDLC workflow I can help with instead?"
+
+GENERAL CONVERSATION MODE:
+Unless specifically instructed that you're in "GUIDED Q&A MODE" (see below), treat user messages as normal conversation within your scope. Answer questions directly, provide advice, discuss topics, and help with general SDLC guidance. You are helpful, conversational, and responsive to all types of questions within your domain — not just artifact-editing questions.
+
+CRITICAL — Single-question focus:
+NEVER repeat, summarize, or replay previous questions and answers in your response. NEVER include "---" separated Q&A history. ONLY answer the single most recent question the user just asked. Previous messages are context for you to read, not content to repeat.
+
+CRITICAL — Response format:
+NEVER append JSON blocks, code blocks, or structured metadata to your conversational responses. NEVER output fields like "confidence_score_0_to_1", "logprobs_available", "result", "basis", or any similar machine-readable annotation. If you want to express confidence, do so in plain prose only (e.g. "I'm fairly confident based on the PRD"). No JSON, no code fences, no structured confidence objects — ever — in chat replies.
+
+CRITICAL — Answering questions about the project:
+When the user asks any question about the project (e.g. "is Okta used?", "what are the risks?", "what's the SLA?"), you MUST search across ALL project artifacts provided in context — not just the currently open one. Cite which artifact (by title/type) you found the information in. If the information exists in any artifact, reference it accurately. Only say something is "not mentioned" or "unknown" after checking every artifact in the context.
 
 When generating artifacts, use clear headings, structured sections, and professional enterprise language. Be thorough but concise.
 
@@ -215,7 +315,7 @@ Agent Conventions (authoritative — from .github/agents/PRD-Builder.agent.md):
 ${_PRD_AGENT_RULES}
 
 GUIDED Q&A MODE — Filling artifact gaps through conversation (CRITICAL):
-This mode activates whenever the user is answering clarifying questions about an open artifact (artifactId is set in context).
+This mode activates whenever the user is answering clarifying questions about an open artifact (artifactId is set in context AND editArtifact=true).
 
 When the user provides answers to clarifying questions about an artifact:
 1. Immediately rebuild and return the FULL updated artifact content after each user answer.
@@ -462,6 +562,13 @@ export async function generateChatResponse(
  * must never happen here. This function always produces a complete HTML document.
  */
 async function callArtifactDirectly(userPrompt: string, preferredModel?: string): Promise<string> {
+  const artifactCallTimeoutMs = Math.max(10000, Number(process.env.ARTIFACT_CALL_TIMEOUT_MS ?? "45000"));
+  const timedFetch = (url: string, init: RequestInit) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), artifactCallTimeoutMs);
+    return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
+  };
+
   const artifactSystemPrompt = `You are an expert SDLC documentation specialist producing enterprise-grade HTML documents.
 
 STRICT RULES — follow these without exception:
@@ -480,7 +587,7 @@ STRICT RULES — follow these without exception:
   const azureProvider = azureProviders.find((p) => p.kind === "azure");
 
   const makeAzureCall = azureProvider
-    ? fetch(azureProvider.url, {
+    ? timedFetch(azureProvider.url, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...azureProvider.headers },
         body: JSON.stringify({
@@ -553,7 +660,7 @@ STRICT RULES — follow these without exception:
 
   let lastError = "";
   for (const provider of providers) {
-    const response = await fetch(provider.url, {
+    const response = await timedFetch(provider.url, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...provider.headers },
       body: JSON.stringify({
@@ -682,7 +789,7 @@ export function scoreArtifactQuality(type: ArtifactType, htmlContent: string): n
       /complexity/,
     ],
     cyber_risk_analysis: [
-      /threat|stride/,
+      /threat|owasp/,
       /attack\s*surface|vulnerability/,
       /authentication|authoriz/,
       /risk\s*matrix|severity|likelihood/,
@@ -875,17 +982,57 @@ REPAIR RULES:
 Output ONLY the full updated HTML PRD body.`;
 }
 
+function buildPrdFieldRepairPrompt(opts: {
+  projectContext: string;
+  draftHtml: string;
+  missingFields: string[];
+  authorName: string;
+  createdDate: string;
+}): string {
+  const missing = opts.missingFields.map((f) => `- ${f}`).join("\n");
+  return `You are repairing a PRD to satisfy mandatory template fields.
+
+PROJECT CONTEXT:
+${opts.projectContext}
+
+CURRENT PRD HTML:
+${opts.draftHtml}
+
+MISSING REQUIRED FIELDS:
+${missing}
+
+REPAIR RULES:
+- Preserve all existing valid content and headings.
+- Ensure Document Information & Revision History includes both:
+  - <strong>Date:</strong> ${opts.createdDate}
+  - <strong>Author:</strong> ${opts.authorName}
+- Ensure Supporting Materials includes a subsection title "Traceability Matrix" and an HTML table mapping Objective -> User Scenario -> Requirement -> Acceptance Criteria.
+- Keep output as HTML body only.
+
+Output ONLY the full updated HTML PRD body.`;
+}
+
 /**
  * PRD multi-pass generation pipeline:
  * 1) initial generation
  * 2) deterministic coverage check
  * 3) targeted expansion pass if gates are not met
  */
-async function generatePrdWithQualityGates(userPrompt: string, projectContext: string, preferredModel?: string): Promise<string> {
+async function generatePrdWithQualityGates(
+  userPrompt: string,
+  projectContext: string,
+  preferredModel?: string,
+  authorName: string = "Unknown",
+  createdDate: string = new Date().toISOString().slice(0, 10)
+): Promise<string> {
+  const maxExpansionPasses = Math.max(0, Number(process.env.PRD_MAX_EXPANSION_PASSES ?? "0"));
+  const enableTemplateRepair = String(process.env.PRD_ENABLE_TEMPLATE_REPAIR ?? "false").toLowerCase() === "true";
+  const enableFieldRepair = String(process.env.PRD_ENABLE_FIELD_REPAIR ?? "false").toLowerCase() === "true";
+
   let current = await callArtifactDirectly(userPrompt, preferredModel);
 
-  // Run up to two expansion passes to satisfy quantity/quality gates.
-  for (let i = 0; i < 2; i++) {
+  // Optional expansion passes (disabled by default for low-latency generation).
+  for (let i = 0; i < maxExpansionPasses; i++) {
     const coverage = analyzePrdCoverage(current);
     if (coverage.unmet.length === 0) break;
 
@@ -898,7 +1045,7 @@ async function generatePrdWithQualityGates(userPrompt: string, projectContext: s
   }
 
   const templateValidation = validatePrdTemplateCompliance(current);
-  if (!templateValidation.ok) {
+  if (!templateValidation.ok && enableTemplateRepair) {
     const repairPrompt = buildPrdTemplateRepairPrompt({
       projectContext,
       draftHtml: current,
@@ -909,9 +1056,30 @@ async function generatePrdWithQualityGates(userPrompt: string, projectContext: s
 
   const finalTemplateValidation = validatePrdTemplateCompliance(current);
   if (!finalTemplateValidation.ok) {
-    throw new TemplateValidationError(
-      `Generated PRD does not match canonical template. Missing headings: ${finalTemplateValidation.missingHeadings.join(", ")}`,
-      finalTemplateValidation.missingHeadings
+    console.warn(
+      `[PRD] Returning draft with missing canonical headings: ${finalTemplateValidation.missingHeadings.join(", ")}`
+    );
+  }
+
+  const requiredFieldValidation = validatePrdRequiredFields(current);
+  if (!requiredFieldValidation.ok && enableFieldRepair) {
+    const fieldRepairPrompt = buildPrdFieldRepairPrompt({
+      projectContext,
+      draftHtml: current,
+      missingFields: requiredFieldValidation.missingFields,
+      authorName,
+      createdDate,
+    });
+    current = await callArtifactDirectly(fieldRepairPrompt, preferredModel);
+  }
+
+  // Deterministic final guard: always set Date/Author from runtime metadata.
+  current = ensurePrdDateAndAuthor(current, authorName, createdDate);
+
+  const finalRequiredFieldValidation = validatePrdRequiredFields(current);
+  if (!finalRequiredFieldValidation.ok) {
+    console.warn(
+      `[PRD] Returning draft with best-effort field repair. Remaining gaps: ${finalRequiredFieldValidation.missingFields.join(", ")}`
     );
   }
 
@@ -936,7 +1104,7 @@ export async function generateArtifact(
 
       if (!hasProvider) {
         console.log('[generateArtifact] No AI provider configured, using mock response'); 
-        return generateMockArtifact(type, projectContext);
+        return generateMockArtifact(type, projectContext, meta?.authorName);
   
   }
 
@@ -949,7 +1117,13 @@ export async function generateArtifact(
 
   try {
     const rawContent = type === "prd"
-      ? await generatePrdWithQualityGates(userPrompt, projectContext, preferredModel)
+      ? await generatePrdWithQualityGates(
+        userPrompt,
+        projectContext,
+        preferredModel,
+        meta?.authorName ?? "Unknown",
+        meta?.createdDate ?? new Date().toISOString().slice(0, 10)
+      )
       : await callArtifactDirectly(userPrompt, preferredModel);
     const content = applyArtifactWatermark(
       type,
@@ -965,10 +1139,11 @@ export async function generateArtifact(
     };
   } catch (err) {
     if (err instanceof TemplateValidationError) {
-      throw err;
+      console.error("[generateArtifact] Template validation failed, using fallback draft:", err.message);
+      return generateMockArtifact(type, projectContext, meta?.authorName);
     }
     console.error("[generateArtifact] AI call failed, using mock:", err);
-    return generateMockArtifact(type, projectContext);
+    return generateMockArtifact(type, projectContext, meta?.authorName);
   }
 }
 
@@ -1076,75 +1251,127 @@ Would you like me to proceed with generating the artifact, or do you have additi
 
 function generateMockArtifact(
   type: ArtifactType,
-  projectContext: string
+  projectContext: string,
+  authorName?: string
 ): ChatResponse {
   const projectName =
     projectContext.match(/Project:\s*(.+)/)?.[1]?.trim() || "This Project";
+  const createdDate = new Date().toISOString().slice(0, 10);
+  const resolvedAuthor = (authorName && authorName.trim()) ? authorName.trim() : "Unknown";
 
   const prdHtml = `<h1>Product Requirements Document</h1>
-<p><em>Draft — answer the clarifying questions in the chat to improve this document. Sections marked <em>[To be confirmed]</em> require stakeholder input before the document can be finalised.</em></p>
+<p><em>Draft generated in fallback mode. Update placeholders as project details become available.</em></p>
 
-<h2>1. Executive Summary</h2>
-<p>This document captures the product requirements for <strong>${projectName}</strong>. It is an initial draft generated from the project title and any uploaded documents. Sections marked <em>[To be confirmed]</em> require input from stakeholders before the document can be finalised.</p>
+<h2>Document Information & Revision History</h2>
+<p><strong>Project Name:</strong> ${projectName}</p>
+<p><strong>Document Version:</strong> 0.1 (Draft)</p>
+<p><strong>Date:</strong> ${createdDate}</p>
+<p><strong>Author:</strong> ${resolvedAuthor}</p>
+<table>
+  <thead>
+    <tr><th>Version</th><th>Date</th><th>Author</th><th>Summary</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>0.1</td><td>${createdDate}</td><td>${resolvedAuthor}</td><td>Initial draft generated from available context.</td></tr>
+  </tbody>
+</table>
 
-<h2>2. Problem Statement</h2>
-<p><em>[To be confirmed — describe the core business problem or user pain point this project solves]</em></p>
+<h2>Executive Summary</h2>
+<p>This Product Requirements Document defines the initial scope for <strong>${projectName}</strong>. The draft follows the canonical PRD template and is structured for iterative refinement.</p>
 
-<h2>3. Goals and Objectives</h2>
+<h2>Project Background & Overview</h2>
+<p><em>[To be confirmed — describe current-state pain points, business drivers, and strategic context]</em></p>
+
+<h2>Objectives & Success Metrics</h2>
 <ul>
-  <li><em>[To be confirmed — primary goal with measurable outcome]</em></li>
-  <li><em>[To be confirmed — secondary goal]</em></li>
-  <li><em>[To be confirmed — success metric / KPI]</em></li>
+  <li><strong>Objective 1:</strong> <em>[To be confirmed]</em></li>
+  <li><strong>Objective 2:</strong> <em>[To be confirmed]</em></li>
+  <li><strong>Objective 3:</strong> <em>[To be confirmed]</em></li>
 </ul>
 
-<h2>4. Target Users / Personas</h2>
-<p><em>[To be confirmed — list the primary user roles and their key needs]</em></p>
+<h2>Scope of Work</h2>
+<p><em>[To be confirmed — define in-scope capabilities for this release]</em></p>
 
-<h2>5. Functional Requirements</h2>
-<h3>FR-1: Core Features</h3>
+<h2>Release Plan / Phasing</h2>
+<ol>
+  <li><strong>Phase 1:</strong> <em>[To be confirmed]</em></li>
+  <li><strong>Phase 2:</strong> <em>[To be confirmed]</em></li>
+  <li><strong>Phase 3:</strong> <em>[To be confirmed]</em></li>
+</ol>
+
+<h2>Out of Scope / Anti-Goals / Future Ideas</h2>
 <ul>
-  <li>FR-1.1: <em>[To be confirmed — first key capability]</em></li>
-  <li>FR-1.2: <em>[To be confirmed — second key capability]</em></li>
-  <li>FR-1.3: <em>[To be confirmed — third key capability]</em></li>
+  <li><em>[To be confirmed — explicitly excluded item 1]</em></li>
+  <li><em>[To be confirmed — explicitly excluded item 2]</em></li>
 </ul>
 
-<h3>FR-2: Supporting Features</h3>
+<h2>Stakeholders</h2>
+<p><em>[To be confirmed — list product owner, engineering owner, compliance owner, operations owner]</em></p>
+
+<h2>Operating Environment & Technical Constraints</h2>
+<p><em>[To be confirmed — hosting, integration boundaries, regulatory constraints, availability targets]</em></p>
+
+<h2>User Personas</h2>
 <ul>
-  <li>FR-2.1: <em>[To be confirmed]</em></li>
-  <li>FR-2.2: <em>[To be confirmed]</em></li>
+  <li><strong>Persona A:</strong> <em>[To be confirmed]</em></li>
+  <li><strong>Persona B:</strong> <em>[To be confirmed]</em></li>
 </ul>
 
-<h2>6. Non-Functional Requirements</h2>
+<h2>User Scenarios & Use Cases</h2>
 <ul>
-  <li><strong>Performance:</strong> <em>[To be confirmed — latency / throughput targets]</em></li>
-  <li><strong>Security:</strong> <em>[To be confirmed — auth model, data sensitivity]</em></li>
-  <li><strong>Scalability:</strong> <em>[To be confirmed — expected user / data volume]</em></li>
-  <li><strong>Availability:</strong> <em>[To be confirmed — SLA target]</em></li>
+  <li><em>[To be confirmed — scenario 1]</em></li>
+  <li><em>[To be confirmed — scenario 2]</em></li>
 </ul>
 
-<h2>7. User Stories</h2>
+<h2>Functional Requirements & Features</h2>
 <ul>
-  <li><em>[To be confirmed — "As a [role], I want to [action] so that [benefit]"]</em></li>
-  <li><em>[To be confirmed]</em></li>
-  <li><em>[To be confirmed]</em></li>
+  <li><strong>FR-001:</strong> <em>[To be confirmed]</em></li>
+  <li><strong>FR-002:</strong> <em>[To be confirmed]</em></li>
+  <li><strong>FR-003:</strong> <em>[To be confirmed]</em></li>
+  <li><strong>FR-004:</strong> <em>[To be confirmed]</em></li>
 </ul>
 
-<h2>8. Acceptance Criteria</h2>
-<p><em>[To be confirmed — testable pass/fail criteria for each requirement]</em></p>
+<h2>UI / UX Design Specifications</h2>
+<p><em>[To be confirmed — navigation, key screens, accessibility expectations]</em></p>
 
-<h2>9. Dependencies and Assumptions</h2>
-<p><em>[To be confirmed — external teams, systems, or services this project depends on]</em></p>
+<h2>Data Management & Governance</h2>
+<p><em>[To be confirmed — data lifecycle, retention, ownership, and quality controls]</em></p>
 
-<h2>10. Out of Scope</h2>
-<p><em>[To be confirmed — explicitly list what will NOT be delivered]</em></p>
+<h2>Security & Compliance Requirements</h2>
+<ul>
+  <li><strong>SEC-001:</strong> <em>[To be confirmed]</em></li>
+  <li><strong>SEC-002:</strong> <em>[To be confirmed]</em></li>
+</ul>
 
-<h2>11. Success Metrics</h2>
-<p><em>[To be confirmed — measurable outcomes that define success]</em></p>
+<h2>Non-Functional Requirements / Quality Attributes</h2>
+<ul>
+  <li><strong>NFR-001 (Performance):</strong> <em>[To be confirmed]</em></li>
+  <li><strong>NFR-002 (Availability):</strong> <em>[To be confirmed]</em></li>
+  <li><strong>NFR-003 (Scalability):</strong> <em>[To be confirmed]</em></li>
+  <li><strong>NFR-004 (Maintainability):</strong> <em>[To be confirmed]</em></li>
+</ul>
 
-<h2>12. Timeline Considerations</h2>
-<p><em>[To be confirmed — key milestones and target dates]</em></p>
+<h2>Product Architecture Overview</h2>
+<p><em>[To be confirmed — system boundary, major components, and integration points]</em></p>
 
-<h2>Open Questions</h2>
+<h2>Assumptions & Dependencies</h2>
+<ul>
+  <li><em>[To be confirmed — dependency 1]</em></li>
+  <li><em>[To be confirmed — dependency 2]</em></li>
+</ul>
+
+<h2>Risks & Mitigations</h2>
+<table>
+  <thead>
+    <tr><th>Risk</th><th>Impact</th><th>Likelihood</th><th>Mitigation</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><em>[To be confirmed]</em></td><td><em>TBD</em></td><td><em>TBD</em></td><td><em>[To be confirmed]</em></td></tr>
+    <tr><td><em>[To be confirmed]</em></td><td><em>TBD</em></td><td><em>TBD</em></td><td><em>[To be confirmed]</em></td></tr>
+  </tbody>
+</table>
+
+<h2>Open Questions / Issues Log</h2>
 <ol>
   <li>What is the core business problem or user pain point this project solves?</li>
   <li>Who are the primary user personas and what are their key needs?</li>
@@ -1152,7 +1379,20 @@ function generateMockArtifact(
   <li>What are the non-functional requirements (performance, security, scalability, availability)?</li>
   <li>What are the key dependencies and external systems?</li>
   <li>What are the target milestones and delivery dates?</li>
-</ol>`;
+</ol>
+
+<h2>Supporting Materials</h2>
+<h3>Traceability Matrix</h3>
+<table>
+  <thead>
+    <tr><th>Objective</th><th>User Scenario</th><th>Requirement</th><th>Acceptance Criteria</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Objective 1</td><td>Scenario 1</td><td>FR-001</td><td><em>[To be confirmed]</em></td></tr>
+    <tr><td>Objective 2</td><td>Scenario 2</td><td>FR-002</td><td><em>[To be confirmed]</em></td></tr>
+    <tr><td>Objective 3</td><td>Scenario 3</td><td>NFR-001</td><td><em>[To be confirmed]</em></td></tr>
+  </tbody>
+</table>`;
 
   const genericHtml = `<h1>${type.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}</h1>
 <p><em>Draft — sections marked [To be confirmed] require stakeholder input.</em></p>
